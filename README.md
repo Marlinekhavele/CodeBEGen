@@ -5,13 +5,11 @@
 
 ## Overview
 
-CodegenBE is an AI-powered tool that enables developers to rapidly generate, deploy, and test backend API functionalities with minimal friction. Built on Python and FastAPI, this tool is designed for agile development teams who need to create robust backend services quickly. CodegenBE streamlines the process of creating efficient APIs, allowing developers to focus on building great products rather than writing boilerplate code. The project consists of both a backend repository (this one) and a companion frontend repository for a complete solution.
+CodegenBE is an AI-powered tool that enables developers to rapidly generate backend API functionalities with minimal friction. Built on Python and FastAPI, this tool is designed for agile development teams who need to create robust backend services quickly. CodegenBE streamlines the process of creating efficient APIs, allowing developers to focus on building great products rather than writing boilerplate code. The project consists of both a backend repository (this one) and a companion frontend repository for a complete solution.
 
 ## Features
 
 - **AI-Powered API Generation**: Automatically generate fully functional FastAPI backend endpoints based on simple descriptions or specifications
-- **Instant Deployment**: Deploy your generated APIs with a single command
-- **Interactive Testing Interface**: Test and validate your endpoints through an intuitive interface
 - **Agile-First Design**: Optimized for rapid iteration and continuous development
 - **Seamless Integration**: Easily integrate generated APIs into existing projects
 - **Comprehensive Documentation**: Auto-generated OpenAPI documentation for all endpoints
@@ -146,10 +144,6 @@ CodegenBE uses a modular architecture with the following components:
 
 - **Core Generator**: AI-powered code generation engine
 - **FastAPI Backend**: Generated APIs use FastAPI for high performance and easy documentation
-- **Template Engine**: Customizable templates for different API patterns
-- **Validator**: Ensures generated code meets best practices and security standards
-- **Testing Suite**: Built-in tools for API validation and stress testing
-- **Deployment Manager**: Handles deployment to various environments
 - **Frontend Repository**: Separate repository for the frontend interface
 
 

@@ -3,7 +3,7 @@ from unittest.mock import patch
 from conftest import TEST_BASE_URL
 
 PROJECT_ID = "new-test-project-6mm6x8"
-ENDPOINT_PATH = "/v1/endpoint"
+ENDPOINT_PATH = "/api/v1/endpoint"
 
 
 @patch(
@@ -27,7 +27,7 @@ def test_delete_endpoint_file(mock_delete_file, client):
         "method": "GET",
         "description": "Deleted endpoint file",
     }
-    response = client.delete(f"{TEST_BASE_URL}/v1/endpoint", params=params)
+    response = client.delete(f"{TEST_BASE_URL}/api/v1/endpoint", params=params)
     print(f"Response status: {response.status_code}")
     print(f"Response body: {response.json()}")
     assert response.status_code == 200
@@ -47,7 +47,7 @@ def test_delete_endpoint_file_invalid_request(client):
         "project_id": PROJECT_ID,
         # Missing endpoint_path and method
     }
-    response = client.delete(f"{TEST_BASE_URL}/v1/endpoint", params=params)
+    response = client.delete(f"{TEST_BASE_URL}/api/v1/endpoint", params=params)
     print(f"Response status: {response.status_code}")
     print(f"Response body: {response.json()}")
     assert response.status_code == 422
@@ -73,7 +73,7 @@ def test_delete_endpoint_file_invalid_repo(mock_delete_file, client):
         "method": "GET",
         "description": "Invalid repo test",
     }
-    response = client.delete(f"{TEST_BASE_URL}/v1/endpoint", params=params)
+    response = client.delete(f"{TEST_BASE_URL}/api/v1/endpoint", params=params)
     print(f"Response status: {response.status_code}")
     print(f"Response body: {response.json()}")
     assert response.status_code == 404
@@ -92,7 +92,7 @@ def test_delete_endpoint_file_server_error(mock_delete_file, client):
         "method": "GET",
         "description": "Server error test",
     }
-    response = client.delete(f"{TEST_BASE_URL}/v1/endpoint", params=params)
+    response = client.delete(f"{TEST_BASE_URL}/api/v1/endpoint", params=params)
     print(f"Response status: {response.status_code}")
     print(f"Response body: {response.json()}")
     assert response.status_code == 500
@@ -114,7 +114,7 @@ def test_delete_endpoint_file_server_error(mock_delete_file, client):
         "commit_hash": None,
         "content_base64": None,
         "method": "GET",
-        "message": "Endpoint not found: /v1/endpoint",
+        "message": "Endpoint not found: /api/v1/endpoint",
         "description": None,
     },
 )
@@ -125,7 +125,7 @@ def test_delete_endpoint_not_found(mock_delete_file, client):
         "endpoint_path": ENDPOINT_PATH,
         "method": "GET",
     }
-    response = client.delete(f"{TEST_BASE_URL}/v1/endpoint", params=params)
+    response = client.delete(f"{TEST_BASE_URL}/api/v1/endpoint", params=params)
     print(f"Response status: {response.status_code}")
     print(f"Response body: {response.json()}")
 

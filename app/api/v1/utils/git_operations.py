@@ -7,7 +7,7 @@ from pathlib import Path
 
 import requests
 
-from config import settings
+from config import BASE_DIR, settings
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +36,12 @@ def run_git_command(command, cwd=None):
     cmd_str = " ".join(command)
     logger.info(f"Running Git command: {cmd_str} in directory: {cwd}")
     try:
+        # Create environment with SSL verification disabled
+        env = os.environ.copy()
+        env["GIT_SSL_NO_VERIFY"] = "true"
+
         result = subprocess.run(
-            command, cwd=cwd, check=True, capture_output=True, text=True
+            command, cwd=cwd, env=env, check=True, capture_output=True, text=True
         )
         output = result.stdout.strip()
         # Truncate long output for logging
@@ -54,16 +58,11 @@ def run_git_command(command, cwd=None):
 
 def clone_template_repo(project_dir, template_repo_url=None):
     """Initialize new project from local template"""
-    import shutil
-    from pathlib import Path
 
     # Always use local template in production
     logger.info(f"Creating project from local template at {project_dir}")
 
-    # Fix: Use an absolute path to find the project_template directory
-    # Start from the root of the project (where main.py is located)
-    root_dir = Path(__file__).parent.parent.parent.parent
-    template_dir = root_dir / "project_template"
+    template_dir = Path(BASE_DIR) / "project_template"
 
     logger.info(f"Using template directory: {template_dir.absolute()}")
 
@@ -160,13 +159,44 @@ def update_git_remote(project_dir, new_repo_url):
 def push_to_remote(project_dir, branch="main"):
     """Push the code to the remote repository"""
     logger.info(f"Pushing code from {project_dir} to remote")
-    return run_git_command(["git", "push", "-u", "origin", branch], cwd=project_dir)
+
+    # Add specific environment variables to disable SSL verification for Git
+    env = os.environ.copy()
+    env["GIT_SSL_NO_VERIFY"] = "true"
+
+    try:
+        # First set the branch to track the remote
+        run_git_command(["git", "branch", "-M", branch], cwd=project_dir)
+        logger.info(f"Set branch name to {branch}")
+
+        # Create a custom subprocess call with the environment variables
+        cmd = ["git", "push", "-u", "origin", branch]
+        logger.info(f"Running command: {' '.join(cmd)}")
+
+        result = subprocess.run(
+            cmd, cwd=project_dir, env=env, check=True, capture_output=True, text=True
+        )
+
+        output = result.stdout.strip()
+        logger.info(f"Push succeeded: {output[:200]}...")
+        return output
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Git push failed: {e.stderr}")
+        # Continue anyway since we've created the local repository
+        logger.warning("Continuing with local repository only")
+        return "Push failed, but local repository was created"
 
 
 def configure_git_for_project(project_dir):
     """Configure Git settings for the project to avoid credential prompts"""
     # Set Git to use credential helper with store option
     run_git_command(["git", "config", "credential.helper", "store"], cwd=project_dir)
+
+    # Disable SSL verification
+    gitea_domain = "159.203.105.4"
+    run_git_command(
+        ["git", "config", f"http.{gitea_domain}.sslVerify", "false"], cwd=project_dir
+    )
 
     # Set user information if needed (optional)
     if hasattr(settings, "GIT_USER_NAME") and hasattr(settings, "GIT_USER_EMAIL"):

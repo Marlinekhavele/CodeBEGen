@@ -8,9 +8,9 @@ from main import app
 
 client = TestClient(app)
 
-ENDPOINT_URL = "/v1/endpoint"
+ENDPOINT_URL = "/api/v1/endpoint"
 PROJECT_ID = "new-test-project-6mm6x8"
-ENDPOINT_PATH = "/v1/endpoint"
+ENDPOINT_PATH = "/api/v1/endpoint"
 UPDATED_FILE_CONTENT = "print('Welcome to CodeBegen Projects!')"
 FILE_CONTENT_BASE64 = base64.b64encode(UPDATED_FILE_CONTENT.encode()).decode()
 
@@ -105,7 +105,7 @@ def test_update_endpoint_file_server_error(mock_update_file, client):
 
     # Make the PUT request
     response = client.put(
-        f"{TEST_BASE_URL}/v1/endpoint",
+        f"{TEST_BASE_URL}/api/v1/endpoint",
         json=payload,
     )
 

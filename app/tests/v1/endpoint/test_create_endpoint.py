@@ -9,7 +9,7 @@ client = TestClient(app)
 
 # Test data
 PROJECT_ID = "new-test-project-6mm6x8"
-ENDPOINT_PATH = "/v1/endpoint"
+ENDPOINT_PATH = "/api/v1/endpoint"
 FILE_CONTENT = "print('Hello World!')"
 FILE_CONTENT_BASE64 = base64.b64encode(FILE_CONTENT.encode()).decode()
 
@@ -19,7 +19,7 @@ FILE_CONTENT_BASE64 = base64.b64encode(FILE_CONTENT.encode()).decode()
     return_value={
         "project_id": PROJECT_ID,
         "endpoint_path": ENDPOINT_PATH,
-        "file_path": "/v1/endpoint.py",
+        "file_path": "api/v1/endpoint.py",
         "content_base64": FILE_CONTENT_BASE64,
         "method": "POST",
         "commit_hash": "abc123def456",
@@ -39,7 +39,7 @@ def test_create_endpoint_file(mock_create_endpoint):
         "method": "POST",
         "description": "New endpoint file",
     }
-    response = client.post("/v1/endpoint", json=payload)
+    response = client.post("/api/v1/endpoint", json=payload)
 
     assert response.status_code in [
         201,
@@ -59,7 +59,7 @@ def test_create_endpoint_file_invalid_method():
         "method": "INVALID",
         "description": "New endpoint file",
     }
-    response = client.post("/v1/endpoint", json=payload)
+    response = client.post("/api/v1/endpoint", json=payload)
     assert response.status_code == 422
 
 
@@ -78,7 +78,7 @@ def test_create_endpoint_file_invalid_repo(mock_project_dir):
         "method": "POST",
         "description": "New endpoint file",
     }
-    response = client.post("/v1/endpoint", json=payload)
+    response = client.post("/api/v1/endpoint", json=payload)
 
     assert (
         response.status_code == 404
@@ -101,7 +101,7 @@ def test_create_endpoint_file_server_error(mock_create_file):
         "method": "POST",
         "description": "New endpoint file",
     }
-    response = client.post("/v1/endpoint", json=payload)
+    response = client.post("/api/v1/endpoint", json=payload)
 
     assert (
         response.status_code == 500

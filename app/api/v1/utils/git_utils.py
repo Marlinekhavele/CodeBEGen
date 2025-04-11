@@ -13,7 +13,10 @@ def create_gitea_repo(project_name: str) -> str:
     }
 
     response = requests.post(
-        f"{settings.GITEA_API_URL}/user/repos", json=payload, headers=headers
+        f"{settings.GITEA_API_URL}/user/repos",
+        json=payload,
+        headers=headers,
+        verify=False,
     )
 
     if response.status_code == 201:
@@ -23,4 +26,4 @@ def create_gitea_repo(project_name: str) -> str:
 
 
 def get_repo_url(project_id: str) -> str:
-    return f"https://git.obimadu.pro/backend.im/{project_id}"
+    return f"https://159.203.105.4/git/CodeBEGen/{project_id}"

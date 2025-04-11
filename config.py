@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, Optional
 
 from decouple import config
 from pydantic_settings import BaseSettings
@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     # Secret key for session
     SECRET_KEY: str = config("SECRET_KEY", default="your-secret-key-for-sessions")
+    COOKIE_MAX_AGE: ClassVar[int] = 86400
 
     # Application port
     APP_PORT: int = config("APP_PORT", default=8000, cast=int)
@@ -28,6 +29,8 @@ class Settings(BaseSettings):
 
     # Optional database URL (if provided directly)
     database_url: Optional[str] = None
+    # CodeBegen base URL
+    CODE_BE_GEN_BASE_URL: str = config("CODE_BE_GEN_BASE_URL", default="example.com")
 
     # Gitea settings
     GITEA_API_URL: str = config(
@@ -86,10 +89,10 @@ class Settings(BaseSettings):
     # CONNECTION_TIMEOUT: int = config("CONNECTION_TIMEOUT", default=10, cast=int)
     # MESSAGE_TIMEOUT: int = config("MESSAGE_TIMEOUT", default=30, cast=int)
 
-    # CONFIRM_PROJECT_DELETE_TOKEN: str = config(
-    #     "CONFIRM_PROJECT_DELETE_TOKEN", default="CONFIRM_DELETE"
-    # )
-    # USE_SOFT_DELETE: bool = config("USE_SOFT_DELETE", default=True, cast=bool)
+    CONFIRM_PROJECT_DELETE_TOKEN: str = config(
+        "CONFIRM_PROJECT_DELETE_TOKEN", default="CONFIRM_DELETE"
+    )
+    USE_SOFT_DELETE: bool = config("USE_SOFT_DELETE", default=True, cast=bool)
 
     class Config:
         env_file = ".env"

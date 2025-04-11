@@ -8,9 +8,9 @@ from main import app
 
 client = TestClient(app)
 
-ENDPOINT_URL = "/v1/endpoint"
+ENDPOINT_URL = "/api/v1/endpoint"
 PROJECT_ID = "new-test-project-6mm6x8"
-ENDPOINT_PATH = "/v1/endpoint"
+ENDPOINT_PATH = "/api/v1/endpoint"
 FILE_CONTENT = "print('Hello World!')"
 FILE_CONTENT_BASE64 = base64.b64encode(FILE_CONTENT.encode()).decode()
 
@@ -80,7 +80,7 @@ def test_get_endpoint_file_server_error(mock_get_file):
     Test server error when getting an endpoint file.
     """
     response = client.get(
-        f"{TEST_BASE_URL}/v1/endpoint?project_id={PROJECT_ID}&endpoint_path={ENDPOINT_PATH}&method=GET"
+        f"{TEST_BASE_URL}/api/v1/endpoint?project_id={PROJECT_ID}&endpoint_path={ENDPOINT_PATH}&method=GET"
     )
 
     assert response.status_code == 500, (

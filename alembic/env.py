@@ -1,11 +1,9 @@
 from logging.config import fileConfig
 
-from sqlalchemy import pool
 
 from alembic import context
 from app.api.db.database import Base, engine
-from app.api.v1.models.endpoints import EndPoint
-from app.api.v1.models.projects import Project
+
 from config import settings
 
 config = context.config

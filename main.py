@@ -4,7 +4,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# from app.api import router as api_router
+from app.api.v1.routes import router as api_router
 from config import settings
 
 app = FastAPI(
@@ -24,7 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# app.include_router(api_router)
+app.include_router(api_router)
 
 
 @app.get("/")
@@ -33,11 +33,6 @@ def read_root():
         "message": "codebegen API is running",
         "version": "1.0.0",
     }
-
-
-@app.get("/health")
-def health_check():
-    return {"status": "healthy"}
 
 
 if __name__ == "__main__":

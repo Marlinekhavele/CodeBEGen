@@ -316,6 +316,35 @@ pytest --cov=api
 
 ---
 
+## Pre-Commit Setup (Required for Code Quality)
+
+To maintain consistent code formatting and catch issues before committing, we use pre-commit hooks.
+
+1. Install Pre-commit Hooks
+   After cloning the repository and installing dependecies, run:
+
+   ```bash
+   pre-commit install
+   ```
+
+   This ensures that all pre-commit hooks run before every commit.
+2. Manually Run Pre-Commit on All Files
+   To check all files before committing:
+
+   ```bash
+   pre-commit run --all-files
+   ```
+
+3. If a Hook Fails, Fix Issues and Retry
+   If pre-commit stops your commit, fix the reported issues and try again.
+
+
+- **Test your endpoints and models** before pushing changes.  
+- **Push Alembic migrations** if database models are modified.  
+- Ensure your code **follows project standards** and **passes tests** before submitting a pull request.
+
+---
+
 ## Using the UI for Code Generation
 
 Once the application is running, you can access the web interface to generate backend code:

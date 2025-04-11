@@ -1,4 +1,12 @@
-from sqlalchemy import Column, ForeignKey, String, Text, UniqueConstraint, DateTime, Boolean
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    String,
+    Text,
+    UniqueConstraint,
+)
 
 from app.api.v1.models.base import BaseTableModel
 
@@ -16,7 +24,6 @@ class EndPoint(BaseTableModel):
     # Fields for soft delete
     is_deleted = Column(Boolean, default=False, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
-    
 
     # Composite unique constraint for path + method + project_id
     __table_args__ = (

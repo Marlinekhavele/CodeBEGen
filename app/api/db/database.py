@@ -1,5 +1,5 @@
-""" The database module
-"""
+"""The database module"""
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, scoped_session, sessionmaker
 
@@ -24,9 +24,11 @@ db_session = scoped_session(SessionLocal)
 # Create declarative base for models
 Base = declarative_base()
 
+
 def create_database():
     """Create all tables defined in models"""
     return Base.metadata.create_all(bind=engine)
+
 
 def get_db():
     """Dependency to get a database session"""

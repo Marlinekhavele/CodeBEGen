@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     DEPLOYMENT_BASE_DIR: str = config("DEPLOYMENT_BASE_DIR", default="/var/www")
     SUBDOMAIN_BASE: str = config("SUBDOMAIN_BASE", default="codebegen")
     TEMP_CODE_DIR: str = config("TEMP_CODE_DIR", default="/tmp")
-    GIT_SERVER_URL: str = config("GIT_SERVER_URL", default="git@backend.im")
+    GIT_SERVER_URL: str = config("GIT_SERVER_URL")
     RUNTIME_COMMAND: str = config("RUNTIME_COMMAND", default="python3")
     LOG_DIR: str = config("LOG_DIR", default="logs")
 
@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     )
 
     # WebSocket settings
-    REMOTE_WS_URL: str = config("REMOTE_WS_URL", default="wss://orc.backend.im/ws")
+    REMOTE_WS_URL: str = config("REMOTE_WS_URL")
     MAX_RECONNECT_ATTEMPTS: int = config("MAX_RECONNECT_ATTEMPTS", default=5, cast=int)
     INITIAL_BACKOFF: int = config("INITIAL_BACKOFF", default=1, cast=int)
     MAX_BACKOFF: int = config("MAX_BACKOFF", default=60, cast=int)

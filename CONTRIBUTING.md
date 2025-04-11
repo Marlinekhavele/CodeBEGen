@@ -1,10 +1,10 @@
-# Contributing to Backend.Im
+# Contributing to CodeBEGen
  
 Thank you for considering contributing to CodeGenBE! We welcome all kinds of contributions, including bug reports, feature requests, and code improvements.
  
 ## Table of Contents
  
-- [Contributing to Backend Im](#contributing-to-project-name)
+- [Contributing to CodeBEGen](#contributing-to-project-name)
   - [Table of Contents](#table-of-contents)
   - [How to Contribute](#how-to-contribute)
     - [Reporting Bugs](#reporting-bugs)

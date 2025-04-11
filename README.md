@@ -16,7 +16,7 @@ CodeBEGen is an AI-powered tool that enables developers to rapidly generate back
 - **Agile-First Design**: Optimized for rapid iteration and continuous development
 - **Seamless Integration**: Easily integrate generated APIs into existing projects
 - **Comprehensive Documentation**: Auto-generated API documentation for all endpoints
-- **Full-Stack Solution**: Backend repository works with companion frontend repository for a complete development experience
+- **Full-Stack Solution**: Backend repository works with companion frontend repository for a complete development experience [FrontEnd Repo](https://github.com/Marlinekhavele/CodeFEGen)
 
 ## Getting Started
 

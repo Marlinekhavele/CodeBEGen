@@ -1,10 +1,9 @@
 import base64
 from unittest.mock import patch
-from conftest import TEST_BASE_URL
-
 
 from fastapi.testclient import TestClient
 
+from conftest import TEST_BASE_URL
 from main import app
 
 client = TestClient(app)
@@ -40,8 +39,7 @@ def test_update_endpoint(mock_update_file):
             "endpoint_path": ENDPOINT_PATH,
             "content_base64": FILE_CONTENT_BASE64,
             "method": "GET",
-            "description": "New endpoint file", 
-
+            "description": "New endpoint file",
         },
     )
 
@@ -80,8 +78,7 @@ def test_update_endpoint_invalid_repository(mock_update_file):
             "endpoint_path": ENDPOINT_PATH,
             "content_base64": FILE_CONTENT_BASE64,
             "method": "GET",
-            "description": "New endpoint file", 
-
+            "description": "New endpoint file",
         },
     )
 
@@ -119,11 +116,11 @@ def test_update_endpoint_file_server_error(mock_update_file, client):
     )
 
     # Assert the response message
-    assert response.json()["message"] == "Failed to update file", (
-        f"Expected message 'Failed to update file', but got {response.json()['message']}"
-    )
+    assert (
+        response.json()["message"] == "Failed to update file"
+    ), f"Expected message 'Failed to update file', but got {response.json()['message']}"
 
     # Assert the error detail contains the expected error message
-    assert "Unexpected error" in response.json()["detail"], (
-        f"Expected 'Unexpected error' in detail, but got {response.json()['detail']}"
-    )
+    assert (
+        "Unexpected error" in response.json()["detail"]
+    ), f"Expected 'Unexpected error' in detail, but got {response.json()['detail']}"

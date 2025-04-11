@@ -1,5 +1,12 @@
-import logging, os, shutil, subprocess, requests, stat
+import logging
+import os
+import shutil
+import stat
+import subprocess
 from pathlib import Path
+
+import requests
+
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -49,47 +56,59 @@ def clone_template_repo(project_dir, template_repo_url=None):
     """Initialize new project from local template"""
     import shutil
     from pathlib import Path
-    
+
     # Always use local template in production
     logger.info(f"Creating project from local template at {project_dir}")
-    
+
     # Fix: Use an absolute path to find the project_template directory
     # Start from the root of the project (where main.py is located)
     root_dir = Path(__file__).parent.parent.parent.parent
     template_dir = root_dir / "project_template"
-    
+
     logger.info(f"Using template directory: {template_dir.absolute()}")
-    
+
     # Check if the template directory exists
     if not template_dir.exists():
         raise ValueError(f"Template directory not found at {template_dir.absolute()}")
-    
+
     # Check if the endpoints directory exists
     if not (template_dir / "endpoints").exists():
-        raise ValueError(f"Endpoints directory not found at {template_dir / 'endpoints'}")
-    
+        raise ValueError(
+            f"Endpoints directory not found at {template_dir / 'endpoints'}"
+        )
+
     # Copy core components with conflict handling
     shutil.copytree(template_dir / "core", project_dir / "core", dirs_exist_ok=True)
-    shutil.copytree(template_dir / "endpoints", project_dir / "endpoints", dirs_exist_ok=True)
+    shutil.copytree(
+        template_dir / "endpoints", project_dir / "endpoints", dirs_exist_ok=True
+    )
     shutil.copytree(template_dir / "models", project_dir / "models", dirs_exist_ok=True)
-    shutil.copytree(template_dir / "schemas", project_dir / "schemas", dirs_exist_ok=True)
-    shutil.copytree(template_dir / "helpers", project_dir / "helpers", dirs_exist_ok=True)
-    shutil.copytree(template_dir / "alembic", project_dir / "alembic", dirs_exist_ok=True)
-    
+    shutil.copytree(
+        template_dir / "schemas", project_dir / "schemas", dirs_exist_ok=True
+    )
+    shutil.copytree(
+        template_dir / "helpers", project_dir / "helpers", dirs_exist_ok=True
+    )
+    shutil.copytree(
+        template_dir / "alembic", project_dir / "alembic", dirs_exist_ok=True
+    )
+
     # Copy main.py and requirements.txt
     shutil.copy(template_dir / "main.py", project_dir / "main.py")
     shutil.copy(template_dir / "requirements.txt", project_dir / "requirements.txt")
     shutil.copy(template_dir / "alembic.ini", project_dir / "alembic.ini")
-    
+
     # Copy .gitignore if it exists
     if (template_dir / ".gitignore").exists():
         shutil.copy(template_dir / ".gitignore", project_dir / ".gitignore")
-    
+
     # Initialize bare git repo
     run_git_command(["git", "init"], cwd=project_dir)
     run_git_command(["git", "add", "."], cwd=project_dir)
-    run_git_command(["git", "commit", "-m", "Initial commit from template"], cwd=project_dir)
-    
+    run_git_command(
+        ["git", "commit", "-m", "Initial commit from template"], cwd=project_dir
+    )
+
     logger.info(f"Successfully initialized project at {project_dir}")
     return "Project initialized from local template"
 
@@ -127,7 +146,8 @@ def update_git_remote(project_dir, new_repo_url):
         # Try to set the URL for the existing remote
         try:
             run_git_command(
-                ["git", "remote", "set-url", "origin", authenticated_url], cwd=project_dir
+                ["git", "remote", "set-url", "origin", authenticated_url],
+                cwd=project_dir,
             )
             logger.info(f"Updated existing 'origin' remote URL: {authenticated_url}")
         except Exception as e2:
@@ -174,7 +194,7 @@ def delete_project_repo(project_slug: str):
         Exception: If the repository cannot be deleted.
     """
     # Local repository deletion
-    repo_path = REPOS_DIR / project_slug  
+    repo_path = REPOS_DIR / project_slug
     if repo_path.exists():
         try:
             # Adjust file permissions to ensure deletion
@@ -192,7 +212,9 @@ def delete_project_repo(project_slug: str):
         logger.warning(f"Local repository at {repo_path} does not exist")
 
     try:
-        gitea_repo_url = f"{settings.GITEA_API_URL}/repos/{settings.GIT_OWNER}/{project_slug}"
+        gitea_repo_url = (
+            f"{settings.GITEA_API_URL}/repos/{settings.GIT_OWNER}/{project_slug}"
+        )
         headers = {"Authorization": f"token {settings.GITEA_TOKEN}"}
         response = requests.delete(gitea_repo_url, headers=headers, timeout=10)
 
@@ -201,7 +223,9 @@ def delete_project_repo(project_slug: str):
         elif response.status_code == 404:
             logger.warning(f"Gitea repository not found: {gitea_repo_url}")
         else:
-            logger.error(f"Failed to delete Gitea repository: {response.status_code} - {response.text}")
+            logger.error(
+                f"Failed to delete Gitea repository: {response.status_code} - {response.text}"
+            )
             raise Exception(f"Failed to delete Gitea repository: {response.text}")
     except Exception as e:
         logger.error(f"Error deleting Gitea repository: {str(e)}")

@@ -1,10 +1,10 @@
-from fastapi.responses import JSONResponse
 from typing import Optional
 
+from fastapi.responses import JSONResponse
+
+
 def error_response(
-    status_code: int,
-    message: str = "Error",
-    detail: Optional[str] = None
+    status_code: int, message: str = "Error", detail: Optional[str] = None
 ) -> JSONResponse:
     """
     Generate a standardized error response.
@@ -16,8 +16,5 @@ def error_response(
     }
     if detail is not None:
         content["detail"] = detail
-    
-    return JSONResponse(
-        status_code=status_code,
-        content=content
-    )
+
+    return JSONResponse(status_code=status_code, content=content)

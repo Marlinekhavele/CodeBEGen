@@ -1,6 +1,4 @@
 import base64
-import pytest
-from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -27,7 +25,7 @@ FILE_CONTENT_BASE64 = base64.b64encode(FILE_CONTENT.encode()).decode()
         "commit_hash": "abc123def456",
         "file_hash": "abcdef123456",  # Add file_hash
         "message": "File created successfully",
-        "description": "New endpoint file", 
+        "description": "New endpoint file",
     },
 )
 def test_create_endpoint_file(mock_create_endpoint):
@@ -39,8 +37,7 @@ def test_create_endpoint_file(mock_create_endpoint):
         "endpoint_path": ENDPOINT_PATH,
         "content_base64": FILE_CONTENT_BASE64,
         "method": "POST",
-        "description": "New endpoint file", 
-
+        "description": "New endpoint file",
     }
     response = client.post("/v1/endpoint", json=payload)
 
@@ -60,8 +57,7 @@ def test_create_endpoint_file_invalid_method():
         "endpoint_path": ENDPOINT_PATH,
         "content_base64": FILE_CONTENT_BASE64,
         "method": "INVALID",
-        "description": "New endpoint file", 
-
+        "description": "New endpoint file",
     }
     response = client.post("/v1/endpoint", json=payload)
     assert response.status_code == 422
@@ -80,8 +76,7 @@ def test_create_endpoint_file_invalid_repo(mock_project_dir):
         "endpoint_path": ENDPOINT_PATH,
         "content_base64": FILE_CONTENT_BASE64,
         "method": "POST",
-        "description": "New endpoint file", 
-
+        "description": "New endpoint file",
     }
     response = client.post("/v1/endpoint", json=payload)
 
@@ -105,8 +100,6 @@ def test_create_endpoint_file_server_error(mock_create_file):
         "content_base64": FILE_CONTENT_BASE64,
         "method": "POST",
         "description": "New endpoint file",
-
-
     }
     response = client.post("/v1/endpoint", json=payload)
 

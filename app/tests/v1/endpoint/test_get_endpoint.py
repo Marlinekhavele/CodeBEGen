@@ -1,9 +1,9 @@
 import base64
 from unittest.mock import patch
-from conftest import TEST_BASE_URL
 
 from fastapi.testclient import TestClient
 
+from conftest import TEST_BASE_URL
 from main import app
 
 client = TestClient(app)
@@ -28,7 +28,7 @@ def test_get_endpoint_file(mock_get_file):
         "method": "GET",
         "file_hash": "abcdef123456",
         "message": "File retrieved successfully",
-        "description": "Endpoint file"
+        "description": "Endpoint file",
     }
 
     response = client.get(
@@ -56,7 +56,7 @@ def test_get_endpoint_file_missing_parameters(mock_get_file):
 
 @patch(
     "app.api.v1.services.endpoints.EndpointService.get_file",
-    side_effect=ValueError("Endpoint not found")
+    side_effect=ValueError("Endpoint not found"),
 )
 def test_get_endpoint_file_not_found(mock_get_file):
     """
@@ -73,7 +73,7 @@ def test_get_endpoint_file_not_found(mock_get_file):
 
 @patch(
     "app.api.v1.services.endpoints.EndpointService.get_file",
-    side_effect=Exception("Unexpected error")
+    side_effect=Exception("Unexpected error"),
 )
 def test_get_endpoint_file_server_error(mock_get_file):
     """

@@ -5,7 +5,7 @@
 
 ## Overview
 
-CodeBEGen is an AI-powered tool that enables developers to rapidly generate backend API functionalities in multiple programming languages with minimal friction. This versatile tool is designed for agile development teams who need to create robust backend services quickly across different technology stacks. CodeBEGen streamlines the process of creating efficient APIs, allowing developers to focus on building great products rather than writing boilerplate code. The project consists of both a backend repository (this one) and a companion frontend repository that provides an intuitive UI for code generation.
+CodeBEGen is an AI-powered tool that enables developers to rapidly generate backend API functionalities in multiple programming languages with minimal friction. This versatile tool is designed for agile development teams who need to create robust backend services quickly across different technology stacks. CodeBEGen streamlines the process of creating efficient APIs, allowing developers to focus on building great products rather than writing boilerplate code. The project consists of both a backend repository (this one) and a companion frontend repository [FrontEnd Repo](https://github.com/Marlinekhavele/CodeFEGen) that provides an intuitive UI for code generation.
 
 ## Features
 
@@ -40,10 +40,10 @@ CodeBEGen is an AI-powered tool that enables developers to rapidly generate back
    cd codebegen
    ```
 
-3. **Switch to the development branch** (if not already on `dev`):  
+3. **Switch to the main branch** (if not already on `main`):  
 
    ```sh
-   git checkout dev
+   git checkout main
    ```
 
 ## Backend Code Generator Project Architecture
@@ -154,17 +154,17 @@ When setting up the database, you need to replace **placeholders** with your act
 The following Entity Relationship Diagram (ERD) shows the core data model for CodBEGen:
 
 ```
-+---------------------+       +----------------------+
-|       Project       |       |      Endpoints       |
-+---------------------+       +----------------------+
-| ID    UniqueID      |------>| ID    UniqueID       |
-|                     |       |                      |
-|       name          |       |       path           |
-|       description   |       |       method         |
-|       slug          |       |       description    |
-|       langauge      |       |       file_hash      |
-|       framework     |       |       project_id     |
-+---------------------+       +----------------------+
++---------------------+                 +----------------------+
+|       Project       |                 |      Endpoints       |
++---------------------+                 +----------------------+
+| ID    UniqueID      |-------          | ID    UniqueID       |
+|                     |       .         |                      |
+|       name          |       .         |       path           |
+|       description   |       .         |       method         |
+|       slug          |       .         |       description    |
+|       langauge      |       .         |       file_hash      |
+|       framework     |         ---->   |      project_id      |
++---------------------+                 +----------------------+
 ```
 
 This schema represents the relationship between projects and their endpoints. Each project can have multiple endpoints, and each endpoint belongs to a single project (one-to-many relationship).
@@ -179,13 +179,13 @@ CREATE USER user WITH PASSWORD 'your_password';
 
 🔹 **Replace:**  
 
-- `user` → Your **preferred database username** (e.g., `backend_fastapi_user`).  
+- `user` → Your **preferred database username** (e.g., `codebegen`).  
 - `your_password` → A **secure password** for the user (e.g`StrongP@ssw0rd`).  
 
 ✅ **Example:**  
 
 ```sql
-CREATE USER backend_fastapi_user WITH PASSWORD 'StrongP@ssw0rd';
+CREATE USER codebegen WITH PASSWORD 'StrongP@ssw0rd';
 ```
 
 ---
@@ -193,17 +193,17 @@ CREATE USER backend_fastapi_user WITH PASSWORD 'StrongP@ssw0rd';
 ## **Step 2: Create the Database**
 
 ```sql
-CREATE DATABASE backend_fast_api;
+CREATE DATABASE codenegen;
 ```
 
 🔹 **Replace:**  
 
-- `backend_fast_api` → Your **preferred database name** (e.g.`backend_fast_api`).  
+- `codebegen` → Your **preferred database name** (e.g.`codebegen`).  
 
 ✅ **Example:**  
 
 ```sql
-CREATE DATABASE backend_fast_api;
+CREATE DATABASE codebegen;
 ```
 
 ---
@@ -211,18 +211,18 @@ CREATE DATABASE backend_fast_api;
 ## **Step 3: Grant Permissions**
 
 ```sql
-GRANT ALL PRIVILEGES ON DATABASE backend_fast_api TO user;
+GRANT ALL PRIVILEGES ON DATABASE codebegen TO user;
 ```
 
 🔹 **Replace:**  
 
-- `backend_fast_api` → The **database name you used** in Step 2.  
+- `codebegen` → The **database name you used** in Step 2.  
 - `user` → The **username you created** in Step 1.  
 
 ✅ **Example:**  
 
 ```sql
-GRANT ALL PRIVILEGES ON DATABASE backend_fast_api TO backend_fastapi_user;
+GRANT ALL PRIVILEGES ON DATABASE codebegen TO user;
 ```
 
 ---
@@ -232,20 +232,17 @@ GRANT ALL PRIVILEGES ON DATABASE backend_fast_api TO backend_fastapi_user;
 Edit the `.env` file to match your setup.
 
 ```env
-DATABASE_URL=postgresql://user:your_password@localhost/backend_fast_api
+DATABASE_URL=postgresql://user:your_password@localhost/codebegen
 ```
 
 🔹 **Replace:**  
 
 - `user` → Your **database username**.  
 - `your_password` → Your **database password**.  
-- `backend_fast_api` → Your **database name**.  
+- `codebegen` → Your **database name**.  
 
 ✅ **Example:**  
 
-```env
-DATABASE_URL=postgresql://backend_fastapi_user:StrongP@ssw0rd@localhost/backend_fast_api
-```
 
 ---
 
@@ -254,18 +251,18 @@ DATABASE_URL=postgresql://backend_fastapi_user:StrongP@ssw0rd@localhost/backend_
 After setting up the database, test the connection:
 
 ```sh
-psql -U user -d backend_fast_api -h localhost
+psql -U user -d codebegen -h localhost
 ```
 
 🔹 **Replace:**  
 
 - `user` → Your **database username**.  
-- `backend_fast_api` → Your **database name**.  
+- `codebegen` → Your **database name**.  
 
 ✅ **Example:**  
 
 ```sh
-psql -U backend_fastapi_user -d backend_fast_api -h localhost
+psql -U user -d codebegen -h localhost
 ```
 
 ## **Step 6: Run database migrations**  

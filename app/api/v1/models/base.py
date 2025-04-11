@@ -1,10 +1,12 @@
 """This is the Base Model Class"""
+
 import enum
 from datetime import datetime
 
+from sqlalchemy import Column, DateTime, String
 from uuid6 import uuid7
+
 from app.api.db.database import Base
-from sqlalchemy import Column, String, DateTime, func
 
 
 class BaseTableModel(Base):
@@ -19,7 +21,11 @@ class BaseTableModel(Base):
     def to_dict(self):
         """Convert model instance to dictionary, handling enum values."""
         return {
-            c.name: getattr(self, c.name).value if isinstance(getattr(self, c.name), enum.Enum) else getattr(self, c.name)
+            c.name: (
+                getattr(self, c.name).value
+                if isinstance(getattr(self, c.name), enum.Enum)
+                else getattr(self, c.name)
+            )
             for c in self.__table__.columns
         }
 

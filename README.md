@@ -143,9 +143,20 @@ poetry run python main.py
 
 ## **Database Setup**  
 
-### **Replacing Placeholders in Database Setup**  
+### **Environment Configuration**
 
-When setting up the database, you need to replace **placeholders** with your actual values. Below is a breakdown of where to replace them:
+The application uses the following database configuration variables in the `.env` file:
+
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=password
+DB_NAME=code_be_gen
+DB_TYPE=postgresql
+```
+
+Make sure to update these values to match your actual database setup if needed.
 
 ---
 
@@ -173,37 +184,23 @@ This schema represents the relationship between projects and their endpoints. Ea
 
 ## **Step 1: Create a Database User**
 
+If you need to create a new database user (skip if using existing postgres user):
+
 ```sql
-CREATE USER user WITH PASSWORD 'your_password';
+CREATE USER postgres WITH PASSWORD 'password';
 ```
 
 🔹 **Replace:**  
 
-- `user` → Your **preferred database username** (e.g., `codebegen`).  
-- `your_password` → A **secure password** for the user (e.g`StrongP@ssw0rd`).  
-
-✅ **Example:**  
-
-```sql
-CREATE USER codebegen WITH PASSWORD 'StrongP@ssw0rd';
-```
+- `postgres` → Your **preferred database username** if different.  
+- `password` → A **secure password** if different.  
 
 ---
 
 ## **Step 2: Create the Database**
 
 ```sql
-CREATE DATABASE codenegen;
-```
-
-🔹 **Replace:**  
-
-- `codebegen` → Your **preferred database name** (e.g.`codebegen`).  
-
-✅ **Example:**  
-
-```sql
-CREATE DATABASE codebegen;
+CREATE DATABASE code_be_gen;
 ```
 
 ---
@@ -211,38 +208,31 @@ CREATE DATABASE codebegen;
 ## **Step 3: Grant Permissions**
 
 ```sql
-GRANT ALL PRIVILEGES ON DATABASE codebegen TO user;
+GRANT ALL PRIVILEGES ON DATABASE code_be_gen TO postgres;
 ```
 
 🔹 **Replace:**  
 
-- `codebegen` → The **database name you used** in Step 2.  
-- `user` → The **username you created** in Step 1.  
-
-✅ **Example:**  
-
-```sql
-GRANT ALL PRIVILEGES ON DATABASE codebegen TO user;
-```
+- `postgres` → The **username** you are using.  
 
 ---
 
-## **Step 4: Update `.env` File**
+## **Step 4: Configure Environment Variables**
 
-Edit the `.env` file to match your setup.
+Create or edit the `.env` file in the project root to include:
 
 ```env
-DATABASE_URL=postgresql://user:your_password@localhost/codebegen
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=password
+DB_NAME=code_be_gen
+DB_TYPE=postgresql
 ```
 
-🔹 **Replace:**  
+The application will use these variables to construct the database connection string.
 
-- `user` → Your **database username**.  
-- `your_password` → Your **database password**.  
-- `codebegen` → Your **database name**.  
-
-✅ **Example:**  
-
+✅ **Note:** For local development, the default values shown above should work if you've set up PostgreSQL with the default postgres user.
 
 ---
 
@@ -251,19 +241,10 @@ DATABASE_URL=postgresql://user:your_password@localhost/codebegen
 After setting up the database, test the connection:
 
 ```sh
-psql -U user -d codebegen -h localhost
+psql -U postgres -d code_be_gen -h localhost
 ```
 
-🔹 **Replace:**  
-
-- `user` → Your **database username**.  
-- `codebegen` → Your **database name**.  
-
-✅ **Example:**  
-
-```sh
-psql -U user -d codebegen -h localhost
-```
+---
 
 ## **Step 6: Run database migrations**  
 

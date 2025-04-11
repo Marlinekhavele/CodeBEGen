@@ -26,4 +26,4 @@ def create_gitea_repo(project_name: str) -> str:
 
 
 def get_repo_url(project_id: str) -> str:
-    return f"https://159.203.105.4/git/CodeBEGen/{project_id}"
+    return f"https://{settings.CODE_BE_GEN_BASE_URL}/git/CodeBEGen/{project_id}"

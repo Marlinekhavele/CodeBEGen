@@ -417,7 +417,6 @@ class CodeGenerationService:
     # The following methods remain unchanged from your original implementation
     async def _check_and_update_existing_model(self, project_id, entity_name, prompt_description, endpoint_code, language):
         """Check if entity already exists and update it if needed"""
-        # Keep the implementation as is
         try:
             # First check if there's an existing model
             from app.api.v1.services.project_analysis_service import ProjectAnalysisService
@@ -440,9 +439,37 @@ class CodeGenerationService:
                 entity_name=entity_name,
                 prompt_description=prompt_description,
                 endpoint_code=endpoint_code,
-                generate_migration=True,
+                generate_migration=False,  # Don't generate migration automatically
                 language=language
             )
+            
+            # Only generate migration if changes were actually made
+            if update_result and update_result.get("model_updated", False):
+                logger.info(f"Model was updated, generating migration")
+                # Generate migration explicitly
+                from app.api.v1.services.langchain_service import LangchainService
+                migration_result = await LangchainService.generate_migration(
+                    project_id=project_id, 
+                    entity_name=entity_name,
+                    language=language,
+                    model_code=update_result.get("content_base64", None)
+                )
+                
+                # Add migration to files to commit if generated successfully
+                if migration_result and "generated_code" in migration_result:
+                    logger.info(f"Adding migration to commit: {migration_result.get('file_path')}")
+                    if "files_to_commit" not in update_result:
+                        update_result["files_to_commit"] = []
+                    
+                    update_result["files_to_commit"].append({
+                        "file_path": migration_result.get("file_path"),
+                        "commit_message": f"feat: Add migration for {entity_name} model changes",
+                        "content": migration_result.get("generated_code")
+                    })
+                    
+                    update_result["migration"] = migration_result
+            else:
+                logger.info(f"No changes were made to the model, skipping migration generation")
             
             return update_result
             

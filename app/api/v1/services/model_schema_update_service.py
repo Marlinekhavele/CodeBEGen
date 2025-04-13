@@ -340,6 +340,19 @@ class ModelSchemaManager:
         match = re.search(r'(\[\s*{.*}\s*\])', response, re.DOTALL)
         if match:
             return match.group(1).strip()
+            
+        # Handle the case where a JSON array is at the end of the text
+        match = re.search(r'.*?((?:\[\s*\])|(?:\[\s*{.*?}\s*(?:,\s*{.*?}\s*)*\]))', response, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+            
+        # If response contains an empty array statement
+        if "[]" in response:
+            return "[]"
+        
+        # As a final fallback, if we can't find a JSON array but have a clear indication it should be empty
+        if re.search(r'no changes|empty array', response, re.IGNORECASE):
+            return "[]"
         
         return response.strip()
     

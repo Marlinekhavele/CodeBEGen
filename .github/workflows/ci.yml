@@ -1,0 +1,67 @@
+name: CodeBeGen CI - Test and Build
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test_and_build:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+            submodules: false 
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # Install Poetry
+      - name: Install Poetry
+        run: |
+          pip install poetry
+          poetry --version
+
+      # Install dependencies
+      - name: Install dependencies
+        run: poetry install --no-root
+
+      # Run tests
+      - name: Run tests
+        run: poetry run pytest tests/ --verbose
+  # Run pre-commit hooks
+  pre_commit:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+            submodules: false 
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # Install Poetry
+      - name: Install Poetry
+        run: |
+          pip install poetry
+          poetry --version
+
+      # Install dependencies
+      - name: Install dependencies
+        run: poetry install --no-root
+
+      # Run pre-commit hooks
+      - name: Run pre-commit hooks
+        run: poetry run pre-commit run --all-files
+        # Run tests
+      - name : Run tests
+        run: poetry run pytest tests/ --verbose
+      

@@ -829,3 +829,21 @@ class ModelSchemaManager:
                 })
         
         return classes
+
+    @staticmethod
+    def _generate_diff(original: str, modified: str, context_lines: int = 3) -> str:
+        """
+        Generate a unified diff between original and modified content
+        """
+        original_lines = original.splitlines(True)
+        modified_lines = modified.splitlines(True)
+        
+        diff = difflib.unified_diff(
+            original_lines,
+            modified_lines,
+            fromfile="original",
+            tofile="modified",
+            n=context_lines
+        )
+        
+        return ''.join(diff)    

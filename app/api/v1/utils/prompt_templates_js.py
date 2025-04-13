@@ -790,12 +790,12 @@ const userHelpers = {
    */
   getAllUsers: async (options = {}) => {
     try {
-      const { 
-        filter = {}, 
-        limit = 10, 
-        page = 1, 
-        sortBy = 'createdAt', 
-        sortDir = 'desc' 
+      const {
+        filter = {},
+        limit = 10,
+        page = 1,
+        sortBy = 'createdAt',
+        sortDir = 'desc'
       } = options;
 
       // Calculate skip value for pagination
@@ -965,12 +965,12 @@ const userHelpers = {
    */
   getAllUsers: async (options = {}) => {
     try {
-      const { 
-        filter = {}, 
-        limit = 10, 
-        page = 1, 
-        sortBy = 'createdAt', 
-        sortDir = 'desc' 
+      const {
+        filter = {},
+        limit = 10,
+        page = 1,
+        sortBy = 'createdAt',
+        sortDir = 'desc'
       } = options;
 
       // Calculate offset for pagination

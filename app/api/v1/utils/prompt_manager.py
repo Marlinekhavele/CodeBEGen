@@ -1,6 +1,7 @@
 import logging
+from typing import Dict, Optional
+
 from langchain.prompts import PromptTemplate
-from typing import Dict,Optional
 
 logger = logging.getLogger(__name__)
 
@@ -21,24 +22,27 @@ class PromptManager:
         # Load basic Python templates
         from app.api.v1.utils.prompt_templates_py import (
             ENDPOINT_GENERATION_TEMPLATE,
+            HELPER_FUNCTIONS_TEMPLATE,
+            MIGRATION_GENERATION_TEMPLATE,
             MODEL_GENERATION_TEMPLATE,
             SCHEMA_GENERATION_TEMPLATE,
-            MIGRATION_GENERATION_TEMPLATE,
-            HELPER_FUNCTIONS_TEMPLATE
         )
 
         # Load language-specific templates if available
         try:
             from app.api.v1.utils.prompt_templates_js import (
                 JS_ENDPOINT_GENERATION_TEMPLATE,
+                JS_HELPER_FUNCTIONS_TEMPLATE,
+                JS_MIGRATION_GENERATION_TEMPLATE,
                 JS_MODEL_GENERATION_TEMPLATE,
                 JS_SCHEMA_GENERATION_TEMPLATE,
-                JS_MIGRATION_GENERATION_TEMPLATE,
-                JS_HELPER_FUNCTIONS_TEMPLATE
             )
+
             has_js_templates = True
         except ImportError:
-            logger.warning("JavaScript templates not found. Using Python templates as fallback.")
+            logger.warning(
+                "JavaScript templates not found. Using Python templates as fallback."
+            )
             has_js_templates = False
 
         # Process templates to escape literal curly braces
@@ -48,9 +52,18 @@ class PromptManager:
 
             # Define valid placeholders in the template
             placeholders = [
-                "endpoint_description", "method", "method_lower", "endpoint_path",
-                "additional_context", "language", "entity_name", "entity_description",
-                "endpoint_code", "model_code", "schema_code", "latest_migration_id"
+                "endpoint_description",
+                "method",
+                "method_lower",
+                "endpoint_path",
+                "additional_context",
+                "language",
+                "entity_name",
+                "entity_description",
+                "endpoint_code",
+                "model_code",
+                "schema_code",
+                "latest_migration_id",
             ]
 
             # Create a pattern to identify valid placeholders
@@ -74,26 +87,42 @@ class PromptManager:
                 "endpoint": PromptTemplate.from_template(ENDPOINT_GENERATION_TEMPLATE),
                 "model": PromptTemplate.from_template(MODEL_GENERATION_TEMPLATE),
                 "schema": PromptTemplate.from_template(SCHEMA_GENERATION_TEMPLATE),
-                "migration": PromptTemplate.from_template(MIGRATION_GENERATION_TEMPLATE),
-                "helpers": PromptTemplate.from_template(HELPER_FUNCTIONS_TEMPLATE)
+                "migration": PromptTemplate.from_template(
+                    MIGRATION_GENERATION_TEMPLATE
+                ),
+                "helpers": PromptTemplate.from_template(HELPER_FUNCTIONS_TEMPLATE),
             }
         }
 
         # Add JavaScript templates if available
         if has_js_templates:
             PromptManager._templates["javascript"] = {
-                "endpoint": PromptTemplate.from_template(escape_template_braces(JS_ENDPOINT_GENERATION_TEMPLATE)),
-                "model": PromptTemplate.from_template(escape_template_braces(JS_MODEL_GENERATION_TEMPLATE)),
-                "schema": PromptTemplate.from_template(escape_template_braces(JS_SCHEMA_GENERATION_TEMPLATE)),
-                "migration": PromptTemplate.from_template(escape_template_braces(JS_MIGRATION_GENERATION_TEMPLATE)),
-                "helpers": PromptTemplate.from_template(escape_template_braces(JS_HELPER_FUNCTIONS_TEMPLATE))
+                "endpoint": PromptTemplate.from_template(
+                    escape_template_braces(JS_ENDPOINT_GENERATION_TEMPLATE)
+                ),
+                "model": PromptTemplate.from_template(
+                    escape_template_braces(JS_MODEL_GENERATION_TEMPLATE)
+                ),
+                "schema": PromptTemplate.from_template(
+                    escape_template_braces(JS_SCHEMA_GENERATION_TEMPLATE)
+                ),
+                "migration": PromptTemplate.from_template(
+                    escape_template_braces(JS_MIGRATION_GENERATION_TEMPLATE)
+                ),
+                "helpers": PromptTemplate.from_template(
+                    escape_template_braces(JS_HELPER_FUNCTIONS_TEMPLATE)
+                ),
             }
 
         PromptManager._initialized = True
-        logger.info(f"Prompt templates loaded for languages: {list(PromptManager._templates.keys())}")
+        logger.info(
+            f"Prompt templates loaded for languages: {list(PromptManager._templates.keys())}"
+        )
 
     @staticmethod
-    def get_template(template_name: str, language: str = "python") -> Optional[PromptTemplate]:
+    def get_template(
+        template_name: str, language: str = "python"
+    ) -> Optional[PromptTemplate]:
         """
         Get a template by name and language, loading templates if needed.
 
@@ -112,7 +141,9 @@ class PromptManager:
 
         # If we don't have templates for the requested language, fallback to python
         if language not in PromptManager._templates:
-            logger.warning(f"No templates found for language '{language}'. Falling back to python.")
+            logger.warning(
+                f"No templates found for language '{language}'. Falling back to python."
+            )
             language = "python"
 
         # Get the template for the specified language
@@ -140,12 +171,16 @@ class PromptManager:
         """
         template = PromptManager.get_template(template_name, language)
         if not template:
-            raise ValueError(f"Template '{template_name}' not found for language '{language}'")
+            raise ValueError(
+                f"Template '{template_name}' not found for language '{language}'"
+            )
 
         return template.format(**kwargs)
 
     @staticmethod
-    def add_custom_template(template_name: str, template_string: str, language: str = "python"):
+    def add_custom_template(
+        template_name: str, template_string: str, language: str = "python"
+    ):
         """
         Add a custom template to the manager.
 
@@ -172,9 +207,18 @@ class PromptManager:
 
             # Define valid placeholders in the template
             placeholders = [
-                "endpoint_description", "method", "method_lower", "endpoint_path",
-                "additional_context", "language", "entity_name", "entity_description",
-                "endpoint_code", "model_code", "schema_code", "latest_migration_id"
+                "endpoint_description",
+                "method",
+                "method_lower",
+                "endpoint_path",
+                "additional_context",
+                "language",
+                "entity_name",
+                "entity_description",
+                "endpoint_code",
+                "model_code",
+                "schema_code",
+                "latest_migration_id",
             ]
 
             # Create a pattern to identify valid placeholders
@@ -193,7 +237,9 @@ class PromptManager:
             return temp
 
         # Add the template
-        PromptManager._templates[language][template_name] = PromptTemplate.from_template(
-            escape_template_braces(template_string)
+        PromptManager._templates[language][template_name] = (
+            PromptTemplate.from_template(escape_template_braces(template_string))
         )
-        logger.info(f"Added custom template '{template_name}' for language '{language}'")
+        logger.info(
+            f"Added custom template '{template_name}' for language '{language}'"
+        )

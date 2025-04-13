@@ -87,7 +87,7 @@ async def get_books(
 
 @router.post("/books", status_code=status.HTTP_201_CREATED, response_model=BookSchema)
 async def create_new_book(
-    book: BookCreate, 
+    book: BookCreate,
     db: Session = Depends(get_db) # Use Depends(get_db)
 ):
     \"\"\"Create a new book\"\"\"
@@ -488,7 +488,7 @@ def create_user(db: Session, user_data: UserCreate) -> Union[User, Dict[str, str
     return db_user
 ```
 
-IMPORTANT: 
+IMPORTANT:
 1. Return ONLY the Python code for helper functions related to {entity_name}.
 2. Do not include any explanations, comments, or text after the code.
 3. The code should be well-organized with proper docstrings and type hints.

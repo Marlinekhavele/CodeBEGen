@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeBEGen - Streaming Code Generation</title>
+    <style>
+        /* Keeping your existing styles */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        
+        h1, h2, h3 {
+            color: #0066cc;
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        
+        textarea {
+            min-height: 100px;
+            font-family: monospace;
+        }
+        
+        button {
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #0052a3;
+        }
+        
+        .language-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .language-btn {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: #0066cc;
+        }
+        
+        .language-btn.active {
+            background: #0066cc;
+            color: white;
+            border-color: #0066cc;
+        }
+        
+        .output-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .output-header {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        
+        .tab {
+            padding: 8px 16px;
+            border-radius: 4px 4px 0 0;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            background: #eee;
+            cursor: pointer;
+            margin-right: 4px;
+        }
+        
+        .tab.active {
+            background: white;
+            font-weight: 600;
+        }
+        
+        /* Modified for Monaco Editor */
+        .output {
+            height: 600px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            color: #f8f8f8;
+            padding: 0;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            position: relative;
+        }
+        
+        #monaco-editor {
+            width: 100%;
+            height: 100%;
+        }
+        
+        #status-output {
+            height: 600px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            color: #f8f8f8;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-break: break-word;
+            border: 1px solid #ddd;
+        }
+        
+        .status-bar {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f4f4f4;
+            border-radius: 4px;
+            font-style: italic;
+        }
+        
+        .file-tree {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            background: white;
+            margin-bottom: 20px;
+        }
+        
+        .file-item {
+            padding: 5px 0;
+            cursor: pointer;
+        }
+        
+        .file-item:hover {
+            background: #f4f4f4;
+        }
+        
+        .code-highlight {
+            color: #569cd6;
+        }
+        
+        .string-highlight {
+            color: #ce9178;
+        }
+        
+        .comment-highlight {
+            color: #6a9955;
+        }
+        
+        .error {
+            color: #f44336;
+        }
+        
+        .success {
+            color: #4caf50;
+        }
+        
+        .debug-section {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* Added for streaming control */
+        .streaming-controls {
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .streaming-speed {
+            width: auto;
+            flex: 0 0 150px;
+        }
+    </style>
+    <!-- Monaco Editor CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.js"></script>
+</head>
+<body>
+    <h1>CodeBEGen - Streaming Code Generation</h1>
+    
+    <div class="container">
+        <div>
+            <div class="card">
+                <h2>Generation Parameters</h2>
+                
+                <div class="language-selector">
+                    <button class="language-btn active" data-language="python">Python</button>
+                    <button class="language-btn" data-language="javascript">JavaScript</button>
+                </div>
+                
+                <form id="generation-form">
+                    <div class="form-group">
+                        <label for="project-id">Project ID:</label>
+                        <input type="text" id="project-id" value="demo-project" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="prompt">Prompt:</label>
+                        <textarea id="prompt" required>Create an API endpoint for managing users with fields for name, email, and password.</textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="method">HTTP Method:</label>
+                        <select id="method">
+                            <option value="GET">GET</option>
+                            <option value="POST" selected>POST</option>
+                            <option value="PUT">PUT</option>
+                            <option value="DELETE">DELETE</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="endpoint-path">Endpoint Path:</label>
+                        <input type="text" id="endpoint-path" value="/api/users">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="additional-context">Additional Context (optional):</label>
+                        <textarea id="additional-context" placeholder="Any additional details or requirements..."></textarea>
+                    </div>
+                    
+                    <!-- Added streaming controls -->
+                    <div class="streaming-controls">
+                        <label for="streaming-speed">Streaming Speed:</label>
+                        <select id="streaming-speed" class="streaming-speed">
+                            <option value="fast">Fast (Real-time)</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="slow">Slow (More visible)</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit">Generate Code</button>
+                    <button type="button" id="test-websocket-btn" style="margin-left: 10px; background-color: #28a745;">Test WebSocket</button>
+                </form>
+            </div>
+            
+            <div class="card file-tree">
+                <h3>Generated Files</h3>
+                <div id="file-list">
+                    <p>No files generated yet.</p>
+                </div>
+            </div>
+            
+            <div class="debug-section">
+                <h3>Connection Settings</h3>
+                <div class="form-group">
+                    <label for="websocket-url">WebSocket URL:</label>
+                    <input type="text" id="websocket-url" value="/api/v1/generate/stream">
+                </div>
+                <div id="connection-status">Connection status: Not connected</div>
+            </div>
+        </div>
+        
+        <div class="output-container">
+            <div class="card" style="flex: 1;">
+                <div class="output-header">
+                    <div class="tab active" data-tab="code">Code</div>
+                    <div class="tab" data-tab="status">Status</div>
+                </div>
+                
+                <!-- Monaco Editor Container -->
+                <div id="code-output" class="output tab-content">
+                    <div id="monaco-editor"></div>
+                </div>
+                <div id="status-output" class="output tab-content" style="display: none;">Status messages will appear here...</div>
+                
+                <div class="status-bar" id="status-bar">Ready to generate code.</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // DOM Elements
+        const form = document.getElementById('generation-form');
+        const projectIdInput = document.getElementById('project-id');
+        const promptInput = document.getElementById('prompt');
+        const methodSelect = document.getElementById('method');
+        const endpointPathInput = document.getElementById('endpoint-path');
+        const additionalContextInput = document.getElementById('additional-context');
+        const statusOutput = document.getElementById('status-output');
+        const statusBar = document.getElementById('status-bar');
+        const fileList = document.getElementById('file-list');
+        const languageButtons = document.querySelectorAll('.language-btn');
+        const tabs = document.querySelectorAll('.tab');
+        const testWebSocketBtn = document.getElementById('test-websocket-btn');
+        const webSocketUrlInput = document.getElementById('websocket-url');
+        const connectionStatus = document.getElementById('connection-status');
+        const streamingSpeedSelect = document.getElementById('streaming-speed');
+        
+        // State
+        let selectedLanguage = 'python';
+        let currentSocket = null;
+        let generatedFiles = {};
+        let currentTab = 'code';
+        let currentFile = null;
+        let editor = null;
+        let tokenBuffer = '';
+        let tokenInterval = null;
+        let isStreaming = false;
+        
+        // Initialize Monaco Editor
+        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+        require(['vs/editor/editor.main'], function() {
+            // Create Monaco Editor instance
+            editor = monaco.editor.create(document.getElementById('monaco-editor'), {
+                value: 'Waiting for code generation...',
+                language: selectedLanguage,
+                theme: 'vs-dark',
+                automaticLayout: true,
+                scrollBeyondLastLine: false,
+                minimap: { enabled: true },
+                readOnly: false
+            });
+            
+            // Handle window resize
+            window.addEventListener('resize', function() {
+                editor.layout();
+            });
+        });
+        
+        // Initialize language buttons
+        languageButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Update UI
+                languageButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                // Update state
+                selectedLanguage = btn.getAttribute('data-language');
+                
+                // Update Monaco Editor language
+                if (editor) {
+                    monaco.editor.setModelLanguage(editor.getModel(), selectedLanguage);
+                }
+                
+                addStatusMessage(`Language changed to ${selectedLanguage}`);
+            });
+        });
+        
+        // Initialize tabs
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Update UI
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Update state
+                currentTab = tab.getAttribute('data-tab');
+                
+                // Show/hide content
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.style.display = 'none';
+                });
+                document.getElementById(`${currentTab}-output`).style.display = 'block';
+                
+                // Refresh editor layout if code tab is active
+                if (currentTab === 'code' && editor) {
+                    setTimeout(() => editor.layout(), 10);
+                }
+            });
+        });
+        
+        // Helper functions
+        function updateStatusBar(message, isError = false) {
+            statusBar.textContent = message;
+            statusBar.className = 'status-bar';
+            
+            if (isError) {
+                statusBar.classList.add('error');
+            } else if (message.includes('complete') || message.includes('success')) {
+                statusBar.classList.add('success');
+            }
+        }
+        
+        function addStatusMessage(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            statusOutput.innerHTML += `[${timestamp}] ${message}\n`;
+            statusOutput.scrollTop = statusOutput.scrollHeight;
+        }
+        
+        function updateFileList() {
+            if (Object.keys(generatedFiles).length === 0) {
+                fileList.innerHTML = '<p>No files generated yet.</p>';
+                return;
+            }
+            
+            let html = '';
+            for (const [filePath, fileData] of Object.entries(generatedFiles)) {
+                html += `<div class="file-item" data-path="${filePath}">📄 ${filePath}</div>`;
+            }
+            
+            fileList.innerHTML = html;
+            
+            // Add event listeners
+            document.querySelectorAll('.file-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const filePath = item.getAttribute('data-path');
+                    currentFile = filePath;
+                    
+                    // Show the file content in Monaco Editor
+                    if (editor) {
+                        // Detect language from file extension
+                        const fileExtension = filePath.split('.').pop().toLowerCase();
+                        let language = selectedLanguage;
+                        
+                        // Map file extensions to Monaco language identifiers
+                        const languageMap = {
+                            'py': 'python',
+                            'js': 'javascript',
+                            'html': 'html',
+                            'css': 'css',
+                            'json': 'json',
+                            'md': 'markdown',
+                            'sql': 'sql',
+                            'ts': 'typescript'
+                        };
+                        
+                        if (languageMap[fileExtension]) {
+                            language = languageMap[fileExtension];
+                        }
+                        
+                        // Update editor model
+                        const model = monaco.editor.createModel(
+                            generatedFiles[filePath].generated_code,
+                            language
+                        );
+                        editor.setModel(model);
+                    }
+                    
+                    // Switch to code tab
+                    tabs.forEach(t => t.classList.remove('active'));
+                    document.querySelector('.tab[data-tab="code"]').classList.add('active');
+                    document.querySelectorAll('.tab-content').forEach(content => {
+                        content.style.display = 'none';
+                    });
+                    document.getElementById('code-output').style.display = 'block';
+                    
+                    // Refresh editor layout
+                    if (editor) setTimeout(() => editor.layout(), 10);
+                    
+                    updateStatusBar(`Viewing: ${filePath}`);
+                });
+            });
+        }
+        
+        // Controlled streaming function for better visualization
+        function processStreamToken(token) {
+            const speed = streamingSpeedSelect.value;
+            
+            // Stop any existing streaming
+            if (tokenInterval) {
+                clearInterval(tokenInterval);
+                tokenInterval = null;
+            }
+            
+            // Fast streaming (real-time)
+            if (speed === 'fast') {
+                if (editor) {
+                    const position = editor.getPosition();
+                    const isAtEnd = position && 
+                        position.lineNumber === editor.getModel().getLineCount() && 
+                        position.column === editor.getModel().getLineMaxColumn(position.lineNumber);
+                    
+                    // Append the token to the editor
+                    const currentContent = editor.getValue();
+                    editor.setValue(currentContent + token);
+                    
+                    // Auto-scroll if cursor was at the end
+                    if (isAtEnd) {
+                        editor.revealLine(editor.getModel().getLineCount());
+                    }
+                }
+                return;
+            }
+            
+            // For medium and slow speeds, buffer the tokens and display them gradually
+            tokenBuffer += token;
+            
+            if (!tokenInterval) {
+                // Set a delay based on speed
+                const delay = speed === 'medium' ? 10 : 50; // medium or slow
+                
+                tokenInterval = setInterval(() => {
+                    if (tokenBuffer.length > 0) {
+                        // Take a chunk from the buffer
+                        const chunkSize = speed === 'medium' ? 3 : 1;
+                        const chunk = tokenBuffer.slice(0, chunkSize);
+                        tokenBuffer = tokenBuffer.slice(chunkSize);
+                        
+                        // Add to editor
+                        if (editor) {
+                            const position = editor.getPosition();
+                            const isAtEnd = position && 
+                                position.lineNumber === editor.getModel().getLineCount() && 
+                                position.column === editor.getModel().getLineMaxColumn(position.lineNumber);
+                            
+                            const currentContent = editor.getValue();
+                            editor.setValue(currentContent + chunk);
+                            
+                            // Auto-scroll if cursor was at the end
+                            if (isAtEnd) {
+                                editor.revealLine(editor.getModel().getLineCount());
+                            }
+                        }
+                    } else {
+                        // Buffer is empty, clear interval
+                        clearInterval(tokenInterval);
+                        tokenInterval = null;
+                    }
+                }, delay);
+            }
+        }
+        
+        // WebSocket connection function
+        function createWebSocket(url) {
+            // Close existing socket and streaming
+            if (currentSocket && currentSocket.readyState !== WebSocket.CLOSED) {
+                currentSocket.close();
+            }
+            
+            if (tokenInterval) {
+                clearInterval(tokenInterval);
+                tokenInterval = null;
+            }
+            
+            tokenBuffer = '';
+            isStreaming = false;
+            
+            // Create WebSocket
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            let wsUrl = `${protocol}//${window.location.host}${url}`;
+            
+            // Ensure the URL starts with a leading slash
+            if (!url.startsWith('/')) {
+                wsUrl = `${protocol}//${window.location.host}/${url}`;
+            }
+            
+            addStatusMessage(`Connecting to: ${wsUrl}`);
+            connectionStatus.textContent = `Connection status: Connecting to ${wsUrl}...`;
+            
+            return new WebSocket(wsUrl);
+        }
+        
+        // Test WebSocket connection
+        testWebSocketBtn.addEventListener('click', () => {
+            const wsUrl = webSocketUrlInput.value;
+            addStatusMessage(`Testing WebSocket connection to: ${wsUrl}`);
+            
+            try {
+                // Create WebSocket
+                const testSocket = createWebSocket(wsUrl);
+                
+                // Handle events
+                testSocket.onopen = () => {
+                    addStatusMessage("✅ WebSocket connection established successfully!");
+                    connectionStatus.textContent = `Connection status: Connected to ${wsUrl}`;
+                    connectionStatus.style.color = '#4caf50';
+                    
+                    // Send a simple test message
+                    testSocket.send(JSON.stringify({
+                        type: 'ping',
+                        message: 'Connection test'
+                    }));
+                    
+                    // Close after 5 seconds
+                    setTimeout(() => {
+                        testSocket.close(1000, "Test completed");
+                    }, 5000);
+                };
+                
+                testSocket.onmessage = (event) => {
+                    addStatusMessage(`Received: ${event.data}`);
+                };
+                
+                testSocket.onerror = (error) => {
+                    addStatusMessage(`❌ WebSocket error: ${JSON.stringify(error)}`);
+                    connectionStatus.textContent = `Connection status: Error connecting to ${wsUrl}`;
+                    connectionStatus.style.color = '#f44336';
+                };
+                
+                testSocket.onclose = (event) => {
+                    const reason = event.reason ? `: ${event.reason}` : '';
+                    addStatusMessage(`WebSocket closed with code ${event.code}${reason}`);
+                    connectionStatus.textContent = `Connection status: Disconnected (code: ${event.code})`;
+                    connectionStatus.style.color = '#333';
+                };
+            } catch (error) {
+                addStatusMessage(`❌ Error creating WebSocket: ${error.message}`);
+                connectionStatus.textContent = `Connection status: Failed to create connection`;
+                connectionStatus.style.color = '#f44336';
+            }
+        });
+        
+        // Handle form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Reset state
+            generatedFiles = {};
+            currentFile = null;
+            updateFileList();
+            
+            // Show code tab
+            tabs.forEach(t => t.classList.remove('active'));
+            document.querySelector('.tab[data-tab="code"]').classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            document.getElementById('code-output').style.display = 'block';
+            
+            // Clear outputs
+            if (editor) {
+                editor.setValue('');
+                
+                // Update language according to selection
+                monaco.editor.setModelLanguage(editor.getModel(), selectedLanguage);
+            }
+            statusOutput.textContent = '';
+            
+            // Reset streaming state
+            tokenBuffer = '';
+            if (tokenInterval) {
+                clearInterval(tokenInterval);
+                tokenInterval = null;
+            }
+            isStreaming = false;
+            
+            // Update status
+            updateStatusBar('Connecting to server...');
+            addStatusMessage('Starting code generation...');
+            
+            // Get the WebSocket URL from the input
+            const wsUrl = webSocketUrlInput.value;
+            
+            // Create WebSocket
+            try {
+                currentSocket = createWebSocket(wsUrl);
+                
+                // Prepare request data
+                const requestData = {
+                    project_id: projectIdInput.value,
+                    prompt: promptInput.value,
+                    language: selectedLanguage,
+                    method: methodSelect.value,
+                    endpoint_path: endpointPathInput.value,
+                    additional_context: additionalContextInput.value || null
+                };
+                
+                currentSocket.onopen = () => {
+                    updateStatusBar('Connected. Starting code generation...');
+                    addStatusMessage('WebSocket connection established');
+                    connectionStatus.textContent = `Connection status: Connected to ${wsUrl}`;
+                    connectionStatus.style.color = '#4caf50';
+                    
+                    // Send request data
+                    currentSocket.send(JSON.stringify(requestData));
+                    addStatusMessage('Request sent, waiting for response...');
+                };
+                
+                currentSocket.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        // Handle different message types
+                        switch (data.status) {
+                            case 'info':
+                                addStatusMessage(data.message);
+                                break;
+                                
+                            case 'progress':
+                                updateStatusBar(`${data.stage}: ${data.message}`);
+                                addStatusMessage(`[${data.stage}] ${data.message}`);
+                                if (editor) editor.setValue('');
+                                isStreaming = true;
+                                break;
+                                
+                            case 'completed':
+                                updateStatusBar(`${data.stage} generation complete!`);
+                                addStatusMessage(`${data.stage} generation complete!`);
+                                isStreaming = false;
+                                
+                                // Save the generated file
+                                generatedFiles[data.result.file_path] = data.result;
+                                
+                                // Update file list
+                                updateFileList();
+                                
+                                // Display the generated code in Monaco Editor
+                                currentFile = data.result.file_path;
+                                
+                                if (editor) {
+                                    // Detect language from file extension
+                                    const fileExtension = data.result.file_path.split('.').pop().toLowerCase();
+                                    let language = selectedLanguage;
+                                    
+                                    // Map file extensions to Monaco language identifiers
+                                    const languageMap = {
+                                        'py': 'python',
+                                        'js': 'javascript',
+                                        'html': 'html',
+                                        'css': 'css',
+                                        'json': 'json',
+                                        'md': 'markdown',
+                                        'sql': 'sql',
+                                        'ts': 'typescript'
+                                    };
+                                    
+                                    if (languageMap[fileExtension]) {
+                                        language = languageMap[fileExtension];
+                                    }
+                                    
+                                    // Update editor model
+                                    const model = monaco.editor.createModel(
+                                        data.result.generated_code,
+                                        language
+                                    );
+                                    editor.setModel(model);
+                                }
+                                break;
+                                
+                            case 'complete':
+                                updateStatusBar('Code generation complete!', false);
+                                addStatusMessage('Code generation complete!');
+                                isStreaming = false;
+                                
+                                // Log full result
+                                console.log('Final result:', data.result);
+                                break;
+                                
+                            case 'error':
+                                updateStatusBar(`Error: ${data.message}`, true);
+                                addStatusMessage(`Error: ${data.message}`);
+                                isStreaming = false;
+                                break;
+                                
+                            default:
+                                console.log("Received unrecognized JSON:", data);
+                        }
+                    } catch (e) {
+                        // Not JSON, must be streaming token content
+                        if (isStreaming && editor) {
+                            processStreamToken(event.data);
+                        }
+                    }
+                };
+                
+                currentSocket.onerror = (error) => {
+                    updateStatusBar('WebSocket error occurred', true);
+                    addStatusMessage(`WebSocket error: ${JSON.stringify(error)}`);
+                    connectionStatus.textContent = `Connection status: Error`;
+                    connectionStatus.style.color = '#f44336';
+                    isStreaming = false;
+                };
+                
+                currentSocket.onclose = (event) => {
+                    let message = 'Connection closed';
+                    if (event.code !== 1000) {
+                        message += ` with code ${event.code}`;
+                        if (event.reason) {
+                            message += `: ${event.reason}`;
+                        }
+                    }
+                    
+                    addStatusMessage(message);
+                    connectionStatus.textContent = `Connection status: Disconnected (code: ${event.code})`;
+                    connectionStatus.style.color = '#333';
+                    isStreaming = false;
+                    
+                    if (event.code !== 1000) {
+                        updateStatusBar(message, true);
+                    }
+                    
+                    // Clear any streaming interval
+                    if (tokenInterval) {
+                        clearInterval(tokenInterval);
+                        tokenInterval = null;
+                    }
+                };
+                
+            } catch (error) {
+                updateStatusBar(`Error: ${error.message}`, true);
+                addStatusMessage(`Error creating WebSocket: ${error.message}`);
+                isStreaming = false;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -621,3 +621,21 @@ class LLMService:
         # Make the default behavior conservative - don't generate models
         # unless we have strong indicators that they're needed
         return False
+    
+    @staticmethod
+    def _extract_content_from_response(response: Any) -> str:
+        """Extract generated content from the LLM response"""
+        try:
+            if hasattr(response, 'choices') and len(response.choices) > 0:
+                if hasattr(response.choices[0], 'message') and hasattr(response.choices[0].message, 'content'):
+                    return response.choices[0].message.content
+            
+            # Fallback for dictionary response format
+            if isinstance(response, dict) and 'choices' in response and len(response['choices']) > 0:
+                if 'message' in response['choices'][0] and 'content' in response['choices'][0]['message']:
+                    return response['choices'][0]['message']['content']
+            
+            raise Exception("Could not extract content from LLM response")
+        except Exception as e:
+            logger.error(f"Error extracting content: {str(e)}")
+            raise

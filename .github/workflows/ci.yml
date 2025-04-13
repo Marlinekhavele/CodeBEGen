@@ -4,11 +4,8 @@ on:
   pull_request:
     branches:
       - main
-    paths-ignore:
-        - project_template
-
 jobs:
-  test_and_build:
+  test:
     runs-on: ubuntu-latest
     steps:
       # Checkout the repository
@@ -34,7 +31,7 @@ jobs:
 
       # Run tests
       - name: Run tests
-        run: poetry run pytest tests/ --verbose
+        run: poetry run pytest  --verbose
   # Run pre-commit hooks
   pre_commit:
     runs-on: ubuntu-latest

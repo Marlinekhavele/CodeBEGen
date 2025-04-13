@@ -1,7 +1,7 @@
 import base64
 from typing import Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.api.v1.schemas.response import SuccessResponse
 
@@ -26,7 +26,7 @@ class EndpointFileRequest(BaseModel):
     )
     description: Optional[str] = Field(None, description="Description of the endpoint")
 
-    @validator("method")
+    @field_validator("method")
     def validate_method(cls, v):
         if v.upper() not in ["GET", "POST", "PUT", "DELETE"]:
             raise ValueError("Method must be one of: GET, POST, PUT, DELETE")

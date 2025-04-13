@@ -3,7 +3,10 @@ name = "code-gen-be"
 version = "0.1.0"
 description = "CodegenBE is an AI-powered tool that enables developers to rapidly generate backend API functionalities with minimal friction."
 authors = [
-    {name = "Marline Khavele",email = "khavelemarline@gmail.com"}
+    {name = "Marline Khavele",email = "khavelemarline@gmail.com"},
+    {name = "Oshin Samuel",email = "samuelt.oshin@gmail.com"},
+    {name = "Emmanuel Ekwere",email = "emaduilzjr1@gmail.com"},
+    {name = "Samuel Henrietta Onoge",email = "hetty8004@gmail.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
@@ -21,7 +24,12 @@ dependencies = [
     "pytest (>=8.3.5,<9.0.0)",
     "httpx (>=0.28.1,<0.29.0)",
     "itsdangerous (>=2.2.0,<3.0.0)",
-    "langchain (>=0.3.23,<0.4.0)"
+    "langchain (>=0.3.23,<0.4.0)",
+    "langchain-core (>=0.3.51,<0.4.0)",
+    "langchain-anthropic (>=0.3.10,<0.4.0)",
+    "langchain-community (>=0.3.21,<0.4.0)",
+    "websockets (>=15.0.1,<16.0.0)",
+    "jinja2 (>=3.1.6,<4.0.0)"
 ]
 
 

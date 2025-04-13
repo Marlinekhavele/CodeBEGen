@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # LLM settings
     ANTHROPIC_API_KEY: str = config("ANTHROPIC_API_KEY", default="")
     DEFAULT_LLM_PROVIDER: str = config(
-        "DEFAULT_LLM_PROVIDER", default="anthropic/claude-3-sonnet-20240229"
+        "DEFAULT_LLM_PROVIDER", default="claude-3-sonnet-20240229"
     )
     LLM_MAX_TOKENS: int = config("LLM_MAX_TOKENS", default=4096, cast=int)
     LLM_TEMPERATURE: float = config("LLM_TEMPERATURE", default=0.7, cast=float)

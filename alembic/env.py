@@ -1,9 +1,7 @@
 from logging.config import fileConfig
 
-
 from alembic import context
 from app.api.db.database import Base, engine
-
 from config import settings
 
 config = context.config

@@ -337,47 +337,69 @@ class CodeGenerationService:
 
                 if update_result and update_result.get("model_updated", False):
                     # Model exists and was updated
-                    logger.info(
-                        f"Updated existing model {entity_name} with fields: {update_result.get('field_changes', {}).get('added_fields', [])}"
-                    )
+                    logger.info(f"Updated existing model {entity_name} with fields: {update_result.get('field_changes', {}).get('added_fields', [])}")
                     await self._notify_info(f"Updated existing model {entity_name}")
-
-                    # Add update results to our response
+                    
+                    # Get the model code from the update result
+                    model_code = update_result.get("model_code", "# Updated model code not available")
+                    
+                    # Create a GeneratedArtifact-compatible structure for the model
                     result["model"] = {
+                        "file_path": update_result.get("model_file", f"models/{entity_name.lower()}{LangchainService.get_file_extension(language)}"),
+                        "generated_code": model_code,
+                        "content_base64": update_result.get("content_base64", LangchainService.encode_content(model_code)),
+                        "file_hash": update_result.get("file_hash", LangchainService.generate_file_hash(model_code)),
                         "exists": True,
                         "updated": True,
                         "entity_name": entity_name,
-                        "file_path": update_result.get("model_file"),
-                        "generated_code": update_result.get("content_base64"),
-                        "update_details": update_result.get("field_changes"),
+                        "update_details": update_result.get("field_changes")
                     }
-
+                    
                     # Add schema update results if applicable
                     if update_result.get("schema_updated", False):
+                        # Get the schema code from the update result
+                        schema_code = update_result.get("schema_code", "# Updated schema code not available")
                         schema_results = update_result.get("schema_results", [])
                         result["schema"] = {
+                            "file_path": update_result.get("schema_file", f"schemas/{entity_name.lower()}{LangchainService.get_file_extension(language)}"),
+                            "generated_code": schema_code,
+                            "content_base64": update_result.get("schema_content_base64", LangchainService.encode_content(schema_code)),
+                            "file_hash": update_result.get("schema_file_hash", LangchainService.generate_file_hash(schema_code)),
                             "exists": True,
                             "updated": True,
                             "entity_name": entity_name,
-                            "schema_details": schema_results,
+                            "schema_details": schema_results
                         }
                     else:
+                        placeholder_schema = f"# No updates needed for the schema of {entity_name}"
                         result["schema"] = {
+                            "file_path": f"schemas/{entity_name.lower()}{LangchainService.get_file_extension(language)}",
+                            "generated_code": placeholder_schema,
+                            "content_base64": LangchainService.encode_content(placeholder_schema),
+                            "file_hash": LangchainService.generate_file_hash(placeholder_schema),
                             "exists": True,
                             "updated": False,
-                            "entity_name": entity_name,
+                            "entity_name": entity_name
                         }
-
+                    
                     # Add migration if it was generated during the update
                     if update_result.get("migration"):
                         result["migration"] = update_result.get("migration")
-
+                        
+                        if "file_hash" not in result["migration"] and "generated_code" in result["migration"]:
+                            result["migration"]["file_hash"] = LangchainService.generate_file_hash(
+                                result["migration"]["generated_code"]
+                            )
+                        if "content_base64" not in result["migration"] and "generated_code" in result["migration"]:
+                            result["migration"]["content_base64"] = LangchainService.encode_content(
+                                result["migration"]["generated_code"]
+                            )
+                    
                     # Process files to commit from the update
                     if update_result.get("files_to_commit"):
-                        await self._commit_updated_files(
-                            project_id, update_result.get("files_to_commit")
-                        )
-
+                        await self._commit_updated_files(project_id, update_result.get("files_to_commit"))
+                    
+                    # Set required metadata fields
                     result["entity_name"] = entity_name
                     result["detected_database_usage"] = needs_models
 

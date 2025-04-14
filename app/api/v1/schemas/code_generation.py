@@ -11,7 +11,7 @@ class CodeGenerationRequest(BaseModel):
         ..., description="Natural language description of what to generate"
     )
     language: Optional[str] = Field(
-        "python", description="Programming language: python, javascript, etc."
+        "python", description="Programming language: python, typescript, etc."
     )
 
     method: Optional[str] = Field(
@@ -86,7 +86,7 @@ class GenerationResult(BaseModel):
                 },
                 "entity_name": "User",
                 "detected_database_usage": True,
-                "language": "javascript",
+                "language": "typescript",
                 "file_extension": ".js",
             }
         }
@@ -121,7 +121,7 @@ class CodeGenerationResponse(BaseModel):
                     },
                     "entity_name": "User",
                     "detected_database_usage": True,
-                    "language": "javascript",
+                    "language": "typescript",
                     "file_extension": ".js",
                 },
             }

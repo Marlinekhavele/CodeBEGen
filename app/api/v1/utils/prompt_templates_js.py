@@ -18,7 +18,7 @@ Internally identify the main data entity (e.g., 'User', 'Product', 'Order') to e
 Provide ONLY the JavaScript code for the endpoint.
 
 Example Output Structure:
-```javascript
+```typescript
 const express = require('express');
 const router = express.Router();
 // ... other imports ...
@@ -65,7 +65,7 @@ module.exports = router;
 
 # CODE EXAMPLE
 ## Database-dependent endpoint:
-```javascript
+```typescript
 const express = require('express');
 const router = express.Router();
 const Book = require('../models/book');
@@ -106,7 +106,7 @@ router.post('/books', async (req, res) => {
 ```
 
 ## Non-database dependent endpoint:
-```javascript
+```typescript
 const express = require('express');
 const router = express.Router();
 const { checkSystemStatus } = require('../helpers/healthHelpers');
@@ -148,7 +148,7 @@ CONTEXT PROVIDED (Optional Reference):
 The following endpoint code was generated in a previous step.
 You can use it for context if helpful, but prioritize the Entity Name and Description for model structure.
 Endpoint Code:
-```javascript
+```typescript
 {endpoint_code}
 ```
 
@@ -181,7 +181,7 @@ Choose the most appropriate ORM (Mongoose for MongoDB or Sequelize for SQL datab
 Choose the appropriate example based on the data structure needs:
 
 # CODE EXAMPLE FOR MONGOOSE (MongoDB)
-```javascript
+```typescript
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
@@ -259,7 +259,7 @@ module.exports = User;
 ```
 
 # CODE EXAMPLE FOR SEQUELIZE (SQL)
-```javascript
+```typescript
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/database');
 
@@ -348,11 +348,11 @@ Entity Name: {entity_name}
 
 CONTEXT PROVIDED:
 Endpoint Code (Defines expected schema usage):
-```javascript
+```typescript
 {endpoint_code}
 ```
 Model Code (Defines fields/types):
-```javascript
+```typescript
 {model_code}
 ```
 
@@ -381,7 +381,7 @@ Model Code (Defines fields/types):
 Choose the appropriate example based on what's used in the endpoint:
 
 # CODE EXAMPLE FOR JOI
-```javascript
+```typescript
 const Joi = require('joi');
 
 /**
@@ -443,7 +443,7 @@ module.exports = userSchemas;
 ```
 
 # CODE EXAMPLE FOR EXPRESS VALIDATOR
-```javascript
+```typescript
 const { body, query, param, validationResult } = require('express-validator');
 
 /**
@@ -575,7 +575,7 @@ Latest Migration ID: {latest_migration_id}
 
 CONTEXT PROVIDED:
 Model Code:
-```javascript
+```typescript
 {model_code}
 ```
 
@@ -604,7 +604,7 @@ Model Code:
 Choose the appropriate example based on the model:
 
 # CODE EXAMPLE FOR SEQUELIZE MIGRATION
-```javascript
+```typescript
 'use strict';
 
 /** @type {import('sequelize-cli').Migration} */
@@ -661,7 +661,7 @@ module.exports = {
 ```
 
 # CODE EXAMPLE FOR MONGODB MIGRATION (migrate-mongo)
-```javascript
+```typescript
 module.exports = {
   async up(db, client) {
     // Create collections with validation
@@ -732,15 +732,15 @@ Entity Description: {entity_description}
 
 CONTEXT PROVIDED:
 Endpoint Code (Defines expected helper function names/calls):
-```javascript
+```typescript
 {endpoint_code}
 ```
 Model Code (For DB logic):
-```javascript
+```typescript
 {model_code}
 ```
 Schema Code (For data validation):
-```javascript
+```typescript
 {schema_code}
 ```
 
@@ -770,7 +770,7 @@ Schema Code (For data validation):
 The following example demonstrates helper functions for a User entity:
 
 # CODE EXAMPLE FOR MONGOOSE
-```javascript
+```typescript
 const User = require('../models/user');
 
 /**
@@ -944,7 +944,7 @@ module.exports = userHelpers;
 ```
 
 # CODE EXAMPLE FOR SEQUELIZE
-```javascript
+```typescript
 const { User } = require('../models');
 const { Op } = require('sequelize');
 

@@ -33,7 +33,7 @@ class LLMService:
             method: Optional HTTP method (GET, POST, etc.)
             endpoint_path: Optional path for the endpoint
             additional_context: Optional additional context
-            language: Programming language to generate code in (python, javascript, etc.)
+            language: Programming language to generate code in (python, typescript, etc.)
 
         Returns:
             Dictionary containing all generated artifacts
@@ -259,7 +259,7 @@ class LLMService:
             method: The HTTP method to be used (e.g., GET, POST, PUT, DELETE).
             endpoint_path: The URL path of the endpoint.
             additional_context: Any additional details or constraints to consider.
-            language: Programming language to generate code in (python, javascript, etc.)
+            language: Programming language to generate code in (python, typescript, etc.)
 
         Returns:
             Dict[str, Any]: Information about the generated endpoint.
@@ -295,7 +295,7 @@ class LLMService:
             entity_name: The name of the entity for which the model is generated.
             entity_description: A brief description of the entity.
             endpoint_code: Optional endpoint code for context.
-            language: Programming language to generate code in (python, javascript, etc.)
+            language: Programming language to generate code in (python, typescript, etc.)
 
         Returns:
             Dict[str, Any]: Information about the generated model.
@@ -330,7 +330,7 @@ class LLMService:
             entity_name: The name of the entity for which the schema is generated.
             endpoint_code: Optional endpoint code for context.
             model_code: Optional model code for context.
-            language: Programming language to generate code in (python, javascript, etc.)
+            language: Programming language to generate code in (python, typescript, etc.)
 
         Returns:
             Dict[str, Any]: Information about the generated schema.
@@ -363,7 +363,7 @@ class LLMService:
             project_id: The unique identifier of the project.
             entity_name: The name of the entity for which the migration is generated.
             model_code: Optional model code for context.
-            language: Programming language to generate code in (python, javascript, etc.)
+            language: Programming language to generate code in (python, typescript, etc.)
 
         Returns:
             Dict[str, Any]: Information about the generated migration.
@@ -403,7 +403,7 @@ class LLMService:
             endpoint_code: Optional endpoint code for context.
             model_code: Optional model code for context.
             schema_code: Optional schema code for context.
-            language: Programming language to generate code in (python, javascript, etc.)
+            language: Programming language to generate code in (python, typescript, etc.)
 
         Returns:
             Dict[str, Any]: Information about the generated helpers.

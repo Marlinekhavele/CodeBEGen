@@ -120,7 +120,7 @@ class LangchainService:
         """Get the file extension for a given language"""
         extensions = {
             "python": ".py",
-            "javascript": ".js",
+            "typescript": ".js",
             "typescript": ".ts",
             "java": ".java",
             "go": ".go",

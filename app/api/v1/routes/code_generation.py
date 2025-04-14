@@ -26,7 +26,7 @@ async def generate_code(request: CodeGenerationRequest):
     - Parameters:
       - project_id: Identifier for the project
       - prompt: Natural language description of what should be generated
-      - language: Target programming language (python, javascript, etc.)
+      - language: Target programming language (python, typescript, etc.)
       - method: HTTP method for endpoint generation (GET, POST, etc.) if applicable
       - endpoint_path: Path for the endpoint if applicable
       - additional_context: Optional context about the project or requirements

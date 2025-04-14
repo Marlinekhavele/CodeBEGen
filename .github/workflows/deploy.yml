@@ -23,8 +23,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             # Navigate to project directory
-            cd CodeBeGen
-            
+            cd CodeBEGen
             # Update code from repository
             git pull origin main
 

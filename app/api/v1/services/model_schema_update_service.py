@@ -6,7 +6,7 @@ import tempfile
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-
+import os
 from app.api.v1.services.langchain_service import LangchainService
 
 logger = logging.getLogger(__name__)
@@ -940,3 +940,291 @@ class ModelSchemaManager:
         )
 
         return "".join(diff)
+
+
+    @staticmethod
+    def _convert_to_pydantic_changes(sqlalchemy_changes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Convert SQLAlchemy field changes to Pydantic equivalents
+        """
+        pydantic_changes = []
+        
+        for change in sqlalchemy_changes:
+            pydantic_change = {
+                "type": change["type"],
+                "field_name": change["field_name"]
+            }
+            
+            # Handle renames
+            if change["type"] == "rename":
+                pydantic_change["new_name"] = change["new_name"]
+                pydantic_changes.append(pydantic_change)
+                continue
+                
+            # Handle removals
+            if change["type"] == "remove":
+                pydantic_changes.append(pydantic_change)
+                continue
+            
+            # For add and modify, convert the SQLAlchemy definition to Pydantic type
+            if "definition" in change:
+                pydantic_change["definition"] = ModelSchemaManager._convert_to_pydantic_type(change["definition"])
+                pydantic_changes.append(pydantic_change)
+        
+        return pydantic_changes
+    
+    @staticmethod
+    def _convert_to_pydantic_type(sqlalchemy_definition: str) -> str:
+        """
+        Convert SQLAlchemy column definition to Pydantic field type
+        """
+        # Extract the type from Column definition
+        type_match = re.search(r'Column\(([^,)]+)', sqlalchemy_definition)
+        if not type_match:
+            return "str"  # Default fallback
+            
+        sa_type = type_match.group(1).strip()
+        
+        # Check for nullable
+        nullable = "nullable=False" not in sqlalchemy_definition
+        
+        # Handle common SQLAlchemy types
+        if sa_type in ["String", "Text", "VARCHAR", "CHAR", "TEXT"]:
+            pydantic_type = "str"
+        elif sa_type in ["Integer", "INT", "BIGINT", "SMALLINT"]:
+            pydantic_type = "int"
+        elif sa_type in ["Float", "FLOAT", "DECIMAL", "NUMERIC"]:
+            pydantic_type = "float"
+        elif sa_type in ["Boolean", "BOOLEAN"]:
+            pydantic_type = "bool"
+        elif sa_type in ["DateTime", "DATETIME", "TIMESTAMP"]:
+            pydantic_type = "datetime.datetime"
+        elif sa_type in ["Date", "DATE"]:
+            pydantic_type = "datetime.date"
+        elif sa_type in ["Time", "TIME"]:
+            pydantic_type = "datetime.time"
+        elif sa_type in ["JSON", "JSONB"]:
+            pydantic_type = "Dict[str, Any]"
+        elif "Enum" in sa_type:
+            # Extract enum class name
+            enum_match = re.search(r'Enum\((\w+)', sa_type)
+            if enum_match:
+                pydantic_type = enum_match.group(1)
+            else:
+                pydantic_type = "str"  # Fallback for enums
+        elif "ARRAY" in sa_type:
+            pydantic_type = "List[Any]"
+        elif "UUID" in sa_type:
+            pydantic_type = "uuid.UUID"
+        else:
+            # For unknown types, use a generic type
+            pydantic_type = "Any"
+        
+        # Add Optional wrapper if nullable
+        if nullable:
+            pydantic_type = f"Optional[{pydantic_type}]"
+            
+        return pydantic_type        
+    
+    @staticmethod
+    def _update_schema_class(
+        schema_content: str,
+        class_name: str,
+        line_range: Tuple[int, int],
+        schema_type: str,
+        field_changes: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Update a Pydantic schema class with field changes
+        """
+        lines = schema_content.split('\n')
+        start_line, end_line = line_range
+        
+        # Extract existing fields and their positions
+        existing_fields = {}
+        class_body_start = None
+        
+        # Find where the class body starts (after class declaration and any bases)
+        for i in range(start_line, min(start_line + 5, end_line)):
+            if ":" in lines[i] and not lines[i].strip().startswith("#"):
+                class_body_start = i
+                break
+        
+        if class_body_start is None:
+            class_body_start = start_line + 1  # Default to line after class definition
+        
+        # Map existing fields to their line numbers
+        for i in range(class_body_start, end_line):
+            line = lines[i].strip()
+            # Look for field definitions (name: type or name: type = default)
+            if ":" in line and not line.startswith("#") and not line.startswith("class"):
+                field_name = line.split(":", 1)[0].strip()
+                existing_fields[field_name] = i
+        
+        # Create a temporary file for modifications
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_file:
+            temp_file_path = temp_file.name
+        
+        # Organize changes by type
+        changes_by_type = {
+            "add": [],
+            "modify": [],
+            "remove": [],
+            "rename": []
+        }
+        
+        for change in field_changes:
+            change_type = change["type"]
+            if change_type in changes_by_type:
+                # Skip adding optional fields to Create schemas (they're required)
+                if change_type == "add" and schema_type == "create" and change.get("definition", "").startswith("Optional["):
+                    # Make it non-optional for Create schemas
+                    non_optional_def = re.sub(r'Optional\[(.*?)\]', r'\1', change["definition"])
+                    change["definition"] = non_optional_def
+                changes_by_type[change_type].append(change)
+        
+        # Skip certain changes based on schema type
+        if schema_type == "update":
+            # Update schemas often skip id fields and make fields optional
+            for change in list(changes_by_type["add"]):
+                # Make non-optional fields optional for update schemas
+                if change.get("definition") and not change["definition"].startswith("Optional["):
+                    change["definition"] = f"Optional[{change['definition']}]"
+        
+        # Process the file line by line
+        with open(temp_file_path, 'w') as target_file:
+            in_class = False
+            additions_inserted = False
+            
+            for i, line in enumerate(lines):
+                # Check if entering the target class
+                if i == start_line:
+                    in_class = True
+                # Check if exiting the class
+                elif in_class and i == end_line:
+                    in_class = False
+                
+                # Process field changes within the class
+                if in_class:
+                    # Check if this line defines a field
+                    line_stripped = line.strip()
+                    is_field_def = False
+                    current_field = None
+                    
+                    if ":" in line_stripped and not line_stripped.startswith(("#", "class")):
+                        is_field_def = True
+                        current_field = line_stripped.split(":", 1)[0].strip()
+                    
+                    # Handle field modifications and removals
+                    if is_field_def and current_field:
+                        # Check for modifications
+                        modified = False
+                        for mod_change in changes_by_type["modify"]:
+                            if mod_change["field_name"] == current_field:
+                                # Replace with modified definition
+                                indent = re.match(r'^(\s*)', line).group(1)
+                                modified_line = f"{indent}{current_field}: {mod_change['definition']}"
+                                
+                                # Preserve any default value
+                                if "=" in line_stripped:
+                                    default_value = line_stripped.split("=", 1)[1].strip()
+                                    modified_line += f" = {default_value}"
+                                
+                                target_file.write(modified_line + "\n")
+                                modified = True
+                                break
+                        
+                        # Check for renames
+                        renamed = False
+                        if not modified:
+                            for rename_change in changes_by_type["rename"]:
+                                if rename_change["field_name"] == current_field:
+                                    # Write with the new name
+                                    new_line = line.replace(
+                                        f"{current_field}:", 
+                                        f"{rename_change['new_name']}:"
+                                    )
+                                    target_file.write(new_line + "\n")
+                                    renamed = True
+                                    break
+                        
+                        # Check for removals
+                        removed = False
+                        if not modified and not renamed:
+                            for remove_change in changes_by_type["remove"]:
+                                if remove_change["field_name"] == current_field:
+                                    # Skip this line to remove the field
+                                    removed = True
+                                    break
+                        
+                        # If not modified, renamed, or removed, write the original line
+                        if not modified and not renamed and not removed:
+                            target_file.write(line + "\n")
+                        
+                        continue
+                
+                # Find a suitable position to insert new fields (right after class definition)
+                if in_class and not additions_inserted and i == class_body_start:
+                    # Write the current line
+                    target_file.write(line + "\n")
+                    
+                    # Insert new fields
+                    if changes_by_type["add"]:
+                        # Determine indentation from existing lines
+                        indent = "    "
+                        for j in range(class_body_start + 1, end_line):
+                            if j < len(lines) and lines[j].strip():
+                                indent_match = re.match(r'^(\s+)', lines[j])
+                                if indent_match:
+                                    indent = indent_match.group(1)
+                                    break
+                        
+                        # Add new fields
+                        for add_change in changes_by_type["add"]:
+                            field_line = f"{indent}{add_change['field_name']}: {add_change['definition']}"
+                            target_file.write(field_line + "\n")
+                    
+                    additions_inserted = True
+                    continue
+                
+                # Write all other lines unchanged
+                target_file.write(line + "\n")
+        
+        # If we haven't inserted additions yet (empty class or no suitable insertion point)
+        if not additions_inserted and changes_by_type["add"]:
+            # Append new fields to the end of the file
+            with open(temp_file_path, 'a') as target_file:
+                target_file.write("\n")
+                indent = "    "
+                for add_change in changes_by_type["add"]:
+                    field_line = f"{indent}{add_change['field_name']}: {add_change['definition']}"
+                    target_file.write(field_line + "\n")
+        
+        # Read the modified content
+        with open(temp_file_path, 'r') as f:
+            updated_content = f.read()
+        
+        # Clean up the temp file
+        try:
+            os.unlink(temp_file_path)
+        except:
+            pass
+        
+        # Check if any changes were made
+        changes_made = (
+            changes_by_type["add"] or 
+            changes_by_type["modify"] or 
+            changes_by_type["remove"] or 
+            changes_by_type["rename"]
+        )
+        
+        return {
+            "updated": changes_made,
+            "content": updated_content,
+            "changes": {
+                "added": len(changes_by_type["add"]),
+                "modified": len(changes_by_type["modify"]),
+                "removed": len(changes_by_type["remove"]),
+                "renamed": len(changes_by_type["rename"])
+            }
+        }

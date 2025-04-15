@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import os
 from app.api.v1.services.langchain_service import LangchainService
+from app.api.v1.services.project_analysis_service import ProjectAnalysisService
+
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +53,6 @@ class ModelSchemaManager:
             Dictionary containing update results
         """
         try:
-            # Get project analysis to find the existing model
-            from app.api.v1.services.project_analysis_service import (
-                ProjectAnalysisService,
-            )
-
             project_analysis = await ProjectAnalysisService.analyze_project(project_id)
             logger.info(
                 f"Project analysis found models: {[m.get('name') for m in project_analysis.get('models', [])]}"
@@ -110,16 +107,12 @@ class ModelSchemaManager:
                         existing_model_code
                     ),
                 }
-
-            # Update the model file with all changes
             updated_content, change_summary = ModelSchemaManager._update_model_file(
                 model_path=model_path,
                 entity_name=entity_name,
                 field_changes=field_changes,
                 existing_model_code=existing_model_code,
             )
-
-            # Create a list of files that need to be committed
             files_to_commit = []
             if change_summary.get("changes_made", False):
                 files_to_commit.append(
@@ -168,7 +161,6 @@ class ModelSchemaManager:
             if schema_results.get("schema_updated", False):
                 for schema_result in schema_results.get("schema_results", []):
                     if schema_result.get("updated", False):
-                        # Make sure content is present before adding to commit list
                         schema_content = schema_result.get("content", "")
                         if schema_content:
                             logger.info(
@@ -220,7 +212,6 @@ class ModelSchemaManager:
         Returns a list of change operations (add, modify, remove, rename)
         """
         try:
-            # Define the prompt template for model changes analysis
             MODEL_CHANGES_TEMPLATE = """
             You are an expert SQLAlchemy developer helping to MODIFY an EXISTING database model.
 
@@ -714,11 +705,6 @@ class ModelSchemaManager:
         Update schemas associated with a model after changes
         """
         try:
-            # Get project analysis to find associated schemas
-            from app.api.v1.services.project_analysis_service import (
-                ProjectAnalysisService,
-            )
-
             project_analysis = await ProjectAnalysisService.analyze_project(project_id)
 
             # Find schemas related to the entity
@@ -1207,7 +1193,7 @@ class ModelSchemaManager:
         # Clean up the temp file
         try:
             os.unlink(temp_file_path)
-        except:
+        except Exception :
             pass
         
         # Check if any changes were made

@@ -17,21 +17,19 @@ class ProjectAnalysisService:
         project_id: str, language: str = "python"
     ) -> Dict[str, Any]:
         """
-        Analyze a project's codebase and return a summary, supporting multiple languages
+        Analyze a project's codebase and return a summary, supporting multiple languages.
 
         Args:
-            project_id: The project identifier
-            language: The programming language ("python", "javascript", etc.)
+            project_id (str): The project identifier.
+            language (str): The programming language ("python", "javascript", etc.).
 
         Returns:
-            Dictionary containing project analysis
+            Dict[str, Any]: Dictionary containing project analysis.
         """
         try:
-            # Get the project directory
             repo_url = get_repo_url(project_id)
             project_dir = get_project_dir_from_repo_url(repo_url)
 
-            # Initialize analysis result
             analysis = {
                 "project_id": project_id,
                 "language": language,
@@ -42,19 +40,15 @@ class ProjectAnalysisService:
                 "summary": "",
             }
 
-            # Use language-specific directories and analysis methods
             if language.lower() == "python":
-                # Python project structure
                 await ProjectAnalysisService._analyze_python_project(
                     project_dir, analysis
                 )
             elif language.lower() in ["javascript", "js"]:
-                # JavaScript project structure
                 await ProjectAnalysisService._analyze_javascript_project(
                     project_dir, analysis
                 )
             else:
-                # Default to Python for unsupported languages
                 logger.warning(
                     f"Unsupported language: {language}. Falling back to Python analysis."
                 )
@@ -62,9 +56,7 @@ class ProjectAnalysisService:
                     project_dir, analysis
                 )
 
-            # Generate a summary
             analysis["summary"] = ProjectAnalysisService._generate_summary(analysis)
-
             return analysis
         except Exception as e:
             logger.error(f"Error analyzing project: {str(e)}", exc_info=True)
@@ -73,13 +65,12 @@ class ProjectAnalysisService:
     @staticmethod
     async def _analyze_python_project(project_dir: Path, analysis: Dict[str, Any]):
         """
-        Analyze a Python/FastAPI project structure
+        Analyze a Python/FastAPI project structure.
 
         Args:
-            project_dir: The project directory
-            analysis: Analysis dictionary to populate
+            project_dir (Path): The project directory.
+            analysis (Dict[str, Any]): Analysis dictionary to populate.
         """
-        # Analyze endpoints directory - updated to match flat structure
         endpoints_dir = project_dir / "python" / "endpoints"
         if not endpoints_dir.exists():
             endpoints_dir = project_dir / "endpoints"
@@ -89,7 +80,6 @@ class ProjectAnalysisService:
                 endpoints_dir
             )
 
-        # Analyze models - updated to match flat structure
         models_dir = project_dir / "python" / "models"
         if not models_dir.exists():
             models_dir = project_dir / "models"
@@ -97,7 +87,6 @@ class ProjectAnalysisService:
         if models_dir.exists():
             analysis["models"] = ProjectAnalysisService._analyze_models(models_dir)
 
-        # Analyze schemas - updated to match flat structure
         schemas_dir = project_dir / "python" / "schemas"
         if not schemas_dir.exists():
             schemas_dir = project_dir / "schemas"
@@ -105,10 +94,9 @@ class ProjectAnalysisService:
         if schemas_dir.exists():
             analysis["schemas"] = ProjectAnalysisService._analyze_schemas(schemas_dir)
 
-        # Analyze helpers - new addition to match repository structure
         helpers_dir = project_dir / "python" / "helpers"
         if not helpers_dir.exists():
-            helpers_dir = project_dir / "helpers"  # Try flat structure
+            helpers_dir = project_dir / "helpers"
 
         if helpers_dir.exists():
             analysis["helpers"] = ProjectAnalysisService._analyze_helpers(helpers_dir)
@@ -116,35 +104,30 @@ class ProjectAnalysisService:
     @staticmethod
     async def _analyze_javascript_project(project_dir: Path, analysis: Dict[str, Any]):
         """
-        Analyze a JavaScript/Express.js project structure
+        Analyze a JavaScript/Express.js project structure.
 
         Args:
-            project_dir: The project directory
-            analysis: Analysis dictionary to populate
+            project_dir (Path): The project directory.
+            analysis (Dict[str, Any]): Analysis dictionary to populate.
         """
-        # Analyze controllers (JavaScript equivalent of endpoints)
-        controllers_dir = project_dir / "javascript" / "controllers"
+        controllers_dir = project_dir /  "controllers"
         if controllers_dir.exists():
             analysis["endpoints"] = ProjectAnalysisService._analyze_js_controllers(
                 controllers_dir
             )
 
-        # Analyze models
-        models_dir = project_dir / "javascript" / "models"
+        models_dir = project_dir / "models"
         if models_dir.exists():
             analysis["models"] = ProjectAnalysisService._analyze_js_models(models_dir)
 
-        # Analyze routes
-        routes_dir = project_dir / "javascript" / "routes"
+        routes_dir = project_dir / "routes"
         if routes_dir.exists():
             analysis["routes"] = ProjectAnalysisService._analyze_js_routes(routes_dir)
 
-        # Analyze utils (JavaScript equivalent of helpers)
-        utils_dir = project_dir / "javascript" / "utils"
+        utils_dir = project_dir / "utils"
         if utils_dir.exists():
             analysis["helpers"] = ProjectAnalysisService._analyze_js_utils(utils_dir)
 
-            # Check for validation schemas in utils directory
             validation_files = [
                 f for f in os.listdir(utils_dir) if "validation" in f.lower()
             ]
@@ -158,13 +141,13 @@ class ProjectAnalysisService:
     @staticmethod
     def _analyze_js_controllers(controllers_dir: Path) -> List[Dict[str, Any]]:
         """
-        Analyze JavaScript controllers for Express.js applications
+        Analyze JavaScript controllers for Express.js applications.
 
         Args:
-            controllers_dir: Directory containing controller files
+            controllers_dir (Path): Directory containing controller files.
 
         Returns:
-            List of controller information dictionaries
+            List[Dict[str, Any]]: List of controller information dictionaries.
         """
         controllers = []
 
@@ -182,7 +165,6 @@ class ProjectAnalysisService:
                         logger.error(f"Error reading file {file_path}: {str(io_error)}")
                         continue
 
-                    # Extract route methods (GET, POST, etc.)
                     method_patterns = [
                         r"router\.(get|post|put|delete|patch)\s*\(['\"]([^'\"]+)['\"]",
                         r"app\.(get|post|put|delete|patch)\s*\(['\"]([^'\"]+)['\"]",
@@ -194,7 +176,6 @@ class ProjectAnalysisService:
                             method = match.group(1).upper()
                             path = match.group(2)
 
-                            # Extract function name
                             function_name = None
                             func_match = re.search(
                                 r"(?:async)?\s*function\s+(\w+)\s*\(", content
@@ -708,7 +689,6 @@ class ProjectAnalysisService:
         """
         models = []
 
-        # Add detailed logging
         logger.info(f"Analyzing models directory: {models_dir}")
 
         # Walk through the models directory
@@ -747,19 +727,19 @@ class ProjectAnalysisService:
                                     "name": class_name,
                                     "file": file,
                                     "table_name": class_name.lower()
-                                    + "s",  # Default convention
-                                    "fields": [],  # We'll parse fields separately if needed
+                                    + "s", 
+                                    "fields": [], 
                                 }
                             )
 
-                    # Try to use AST for more accurate model detection
+                    """ Try to use AST for more accurate model detection """
                     try:
                         tree = ast.parse(content)
                         for node in ast.walk(tree):
                             if isinstance(node, ast.ClassDef):
                                 class_name = node.name
 
-                                # Check if this class inherits from Base or another SQLAlchemy base
+                                # To Check if this class inherits from Base or another SQLAlchemy base
                                 # or if it's already in our models list from above
                                 is_model = False
                                 for base in node.bases:
@@ -893,7 +873,7 @@ class ProjectAnalysisService:
 
                     except SyntaxError as e:
                         logger.error(f"Syntax error parsing {file_path}: {str(e)}")
-                        # We already added models from simple class extraction, so no need for fallback
+                        
 
         logger.info(
             f"Found a total of {len(models)} models: {[m['name'] for m in models]}"
@@ -931,7 +911,7 @@ class ProjectAnalysisService:
                             content = f.read()
                     except IOError as io_error:
                         logger.error(f"Error reading file {file_path}: {str(io_error)}")
-                        continue  # Skip this file if there's an error reading it
+                        continue  
 
                     # Extract class names
                     class_names = ProjectAnalysisService._extract_class_names(content)
@@ -957,7 +937,7 @@ class ProjectAnalysisService:
             Optional[str]: The detected HTTP method in uppercase (e.g., "GET", "POST"),
                           or None if no method could be detected
         """
-        # Common patterns for FastAPI route decorators
+        
         method_patterns = [
             r"@router\.get\s*\(",
             r"@router\.post\s*\(",

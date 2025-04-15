@@ -19,13 +19,23 @@ logger = logging.getLogger(__name__)
 
 
 class LangchainService:
-    """
-    Service for generating code artifacts using Langchain with multi-language support
-    """
+    """Service for generating code artifacts using Langchain with multi-language support"""
 
     @staticmethod
     def get_llm(streaming: bool = False, callbacks: Optional[List[Callable]] = None):
-        """Get configured LLM with or without streaming"""
+        """
+        Get configured LLM with or without streaming capability.
+
+        Args:
+            streaming (bool): Whether to enable streaming output from the LLM
+            callbacks (Optional[List[Callable]]): Optional list of callback functions
+
+        Returns:
+            ChatAnthropic: Configured LLM instance
+
+        Raises:
+            ValueError: If Anthropic API key is not found in environment variables
+        """
         import os
 
         # Get API key from environment (try multiple possible names)
@@ -64,7 +74,17 @@ class LangchainService:
         streaming: bool = False,
         callbacks: Optional[List[Callable]] = None,
     ):
-        """Create a Langchain chain from a template string"""
+        """
+        Create a Langchain chain from a template string.
+
+        Args:
+            template_string (str): The prompt template string
+            streaming (bool): Whether to enable streaming output
+            callbacks (Optional[List[Callable]]): Optional callbacks for streaming
+
+        Returns:
+            Chain: A LangChain chain that can process inputs
+        """
         # Create a simple prompt template with a single input variable
         prompt = PromptTemplate.from_template("{input}")
 
@@ -78,7 +98,16 @@ class LangchainService:
 
     @staticmethod
     def create_streaming_chain(template_string: str, callback):
-        """Create a streaming chain with a custom callback"""
+        """
+        Create a streaming chain with a custom callback.
+
+        Args:
+            template_string (str): The prompt template string
+            callback: Callback function to process streaming tokens
+
+        Returns:
+            Chain: A LangChain chain configured for streaming
+        """
         # Create a simple prompt for streaming
         prompt = PromptTemplate.from_template("{input}")
 
@@ -92,17 +121,41 @@ class LangchainService:
 
     @staticmethod
     def encode_content(content: str) -> str:
-        """Encode content to base64"""
+        """
+        Encode content to base64.
+
+        Args:
+            content (str): The string content to encode
+
+        Returns:
+            str: Base64 encoded string
+        """
         return base64.b64encode(content.encode("utf-8")).decode("utf-8")
 
     @staticmethod
     def generate_file_hash(code: str) -> str:
-        """Generates an MD5 hash from code content"""
+        """
+        Generates an MD5 hash from code content.
+
+        Args:
+            code (str): The code content to hash
+
+        Returns:
+            str: MD5 hash of the code content
+        """
         return hashlib.md5(code.encode("utf-8")).hexdigest()
 
     @staticmethod
     def clean_code(code_text: str) -> str:
-        """Remove markdown code block formatting from the provided code text."""
+        """
+        Remove markdown code block formatting from the provided code text.
+
+        Args:
+            code_text (str): The code text that may contain markdown formatting
+
+        Returns:
+            str: Clean code text with markdown formatting removed
+        """
         # Use strip() to remove leading/trailing whitespace
         code_text = code_text.strip()
 
@@ -119,7 +172,15 @@ class LangchainService:
 
     @staticmethod
     def get_file_extension(language: str) -> str:
-        """Get the file extension for a given language (for backward compatibility)"""
+        """
+        Get the file extension for a given language.
+
+        Args:
+            language (str): The programming language name
+
+        Returns:
+            str: File extension including the dot
+        """
         extensions = {
             "python": ".py",
             "javascript": ".js",
@@ -137,15 +198,18 @@ class LangchainService:
         template_name: str, language: str, **template_vars
     ) -> Dict[str, Any]:
         """
-        Generate code using a template from PromptManager
+        Generate code using a template from PromptManager.
 
         Args:
-            template_name: The name of the template to use (endpoint, model, etc.)
-            language: Programming language to generate code for
+            template_name (str): The name of the template to use
+            language (str): Programming language to generate code for
             **template_vars: Variables to pass to the template
 
         Returns:
-            Dictionary with generated code and metadata
+            Dict[str, Any]: Dictionary with generated code and metadata
+
+        Raises:
+            Exception: If code generation fails
         """
         try:
             # Format the template using PromptManager
@@ -184,16 +248,19 @@ class LangchainService:
         context: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Generate custom code using a specific prompt
+        Generate custom code using a specific prompt.
 
         Args:
-            project_id: The project ID
-            prompt: Custom generation prompt
-            language: Programming language
-            context: Additional context code
+            project_id (str): The project ID
+            prompt (str): Custom generation prompt
+            language (str): Programming language
+            context (Optional[str]): Additional context code
 
         Returns:
-            Dictionary with generated code and metadata
+            Dict[str, Any]: Dictionary with generated code and metadata
+
+        Raises:
+            Exception: If code generation fails
         """
         try:
             # Add language-specific context
@@ -231,13 +298,13 @@ class LangchainService:
     @staticmethod
     def _get_language_context(language: str) -> str:
         """
-        Get language-specific context for the LLM
+        Get language-specific context for the LLM.
 
         Args:
-            language: Programming language
+            language (str): Programming language
 
         Returns:
-            Context string specific to the language
+            str: Context string specific to the language
         """
         language = language.lower()
 
@@ -282,14 +349,14 @@ class LangchainService:
         entity_name: str, models_list: List[Dict[str, Any]]
     ) -> Optional[Dict[str, Any]]:
         """
-        Find an existing model in the project that matches the entity name
+        Find an existing model in the project that matches the entity name.
 
         Args:
-            entity_name: The entity name to search for
-            models_list: List of models from project analysis
+            entity_name (str): The entity name to search for
+            models_list (List[Dict[str, Any]]): List of models from project analysis
 
         Returns:
-            Matching model or None if not found
+            Optional[Dict[str, Any]]: Matching model or None if not found
         """
         # Normalize entity name for comparison
         entity_name_lower = entity_name.lower()
@@ -322,7 +389,23 @@ class LangchainService:
         language: str = "python",
         additional_context: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Generate endpoint code using Langchain with language support"""
+        """
+        Generate endpoint code using Langchain with language support.
+
+        Args:
+            project_id (str): Identifier for the project
+            endpoint_description (str): Description of the endpoint functionality
+            method (str): HTTP method for the endpoint (GET, POST, etc.)
+            endpoint_path (str): URL path for the endpoint
+            language (str): Programming language to generate code for
+            additional_context (Optional[str]): Any supplementary information
+
+        Returns:
+            Dict[str, Any]: Dictionary with generated endpoint code and metadata
+
+        Raises:
+            Exception: If endpoint generation fails
+        """
         try:
             # Use our new template-based generation
             result = await LangchainService.generate_code_with_template(
@@ -361,7 +444,22 @@ class LangchainService:
         language: str = "python",
         endpoint_code: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Generate model code using Langchain with language support"""
+        """
+        Generate model code using Langchain with language support.
+
+        Args:
+            project_id (str): Identifier for the project
+            entity_name (str): Name of the entity to model
+            entity_description (str): Description of the entity
+            language (str): Programming language to generate code for
+            endpoint_code (Optional[str]): Optional endpoint code for context
+
+        Returns:
+            Dict[str, Any]: Dictionary with generated model code and metadata
+
+        Raises:
+            Exception: If model generation fails
+        """
         try:
             # Use our new template-based generation
             result = await LangchainService.generate_code_with_template(
@@ -396,7 +494,22 @@ class LangchainService:
         endpoint_code: Optional[str] = None,
         model_code: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Generate schema code using Langchain with language support"""
+        """
+        Generate schema code using Langchain with language support.
+
+        Args:
+            project_id (str): Identifier for the project
+            entity_name (str): Name of the entity to create schemas for
+            language (str): Programming language to generate code for
+            endpoint_code (Optional[str]): Optional endpoint code for context
+            model_code (Optional[str]): Optional model code for context
+
+        Returns:
+            Dict[str, Any]: Dictionary with generated schema code and metadata
+
+        Raises:
+            Exception: If schema generation fails
+        """
         try:
             # Use our new template-based generation
             result = await LangchainService.generate_code_with_template(
@@ -429,7 +542,21 @@ class LangchainService:
         language: str = "python",
         model_code: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Generate migration code using Langchain with language support"""
+        """
+        Generate migration code using Langchain with language support.
+
+        Args:
+            project_id (str): Identifier for the project
+            entity_name (str): Name of the entity to create migrations for
+            language (str): Programming language to generate code for
+            model_code (Optional[str]): Optional model code for context
+
+        Returns:
+            Dict[str, Any]: Dictionary with generated migration code and metadata
+
+        Raises:
+            Exception: If migration generation fails
+        """
         try:
             # Determine the project path based on the project_id
             project_path = f"repos/{project_id}"
@@ -493,7 +620,24 @@ class LangchainService:
         model_code: Optional[str] = None,
         schema_code: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Generate helper functions using Langchain with language support"""
+        """
+        Generate helper functions using Langchain with language support.
+
+        Args:
+            project_id (str): Identifier for the project
+            entity_name (str): Name of the entity to create helpers for
+            entity_description (str): Description of the entity
+            language (str): Programming language to generate code for
+            endpoint_code (Optional[str]): Optional endpoint code for context
+            model_code (Optional[str]): Optional model code for context
+            schema_code (Optional[str]): Optional schema code for context
+
+        Returns:
+            Dict[str, Any]: Dictionary with generated helper code and metadata
+
+        Raises:
+            Exception: If helper function generation fails
+        """
         try:
             # Use our new template-based generation
             result = await LangchainService.generate_code_with_template(
@@ -527,8 +671,13 @@ class LangchainService:
     @staticmethod
     def needs_model_and_schema(code: str) -> bool:
         """
-        Determine if the generated code needs database models and schemas
-        This is maintained for backward compatibility only - use language templates instead
+        Determine if the generated code needs database models and schemas.
+
+        Args:
+            code (str): The code to analyze
+
+        Returns:
+            bool: True if the code references database components
         """
         # Delegate to the appropriate language template if possible
         try:

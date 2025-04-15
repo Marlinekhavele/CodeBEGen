@@ -9,10 +9,21 @@ class PythonTemplate(LanguageTemplate):
     """Python-specific implementation of language template"""
 
     def get_file_extension(self) -> str:
+        """
+        Get the standard file extension for Python files.
+
+        Returns:
+            str: File extension for Python ("py")
+        """
         return "py"
 
     def get_component_map(self) -> Dict[str, Optional[str]]:
-        """Map abstract components to Python-specific components"""
+        """
+        Map abstract components to Python-specific components.
+
+        Returns:
+            Dict[str, Optional[str]]: Mapping of abstract component types to Python-specific ones
+        """
         return {
             "endpoint": "endpoint",
             "model": "model",
@@ -23,11 +34,24 @@ class PythonTemplate(LanguageTemplate):
         }
 
     def get_required_components(self) -> List[str]:
-        """Get components required for Python FastAPI applications"""
+        """
+        Get components required for Python FastAPI applications.
+
+        Returns:
+            List[str]: List of required Python component types
+        """
         return ["endpoint", "model", "schema", "migration", "helpers"]
 
     def needs_database(self, code: str) -> bool:
-        """Check if the Python endpoint code needs database models"""
+        """
+        Check if the Python endpoint code needs database models.
+
+        Args:
+            code (str): The Python code to analyze
+
+        Returns:
+            bool: True if the code references database operations
+        """
         db_patterns = [
             r"from\s+.*models?\s+import",
             r"from\s+.*schemas?\s+import",
@@ -46,7 +70,16 @@ class PythonTemplate(LanguageTemplate):
         return False
 
     def get_component_paths(self, project_id: str, entity_name: str) -> Dict[str, str]:
-        """Get file paths for Python components"""
+        """
+        Get file paths for Python components based on project conventions.
+
+        Args:
+            project_id (str): Identifier for the project being modified
+            entity_name (str): Name of the entity to generate paths for
+
+        Returns:
+            Dict[str, str]: Mapping of component types to their file paths
+        """
         snake_case_entity = self._to_snake_case(entity_name)
 
         return {
@@ -58,7 +91,15 @@ class PythonTemplate(LanguageTemplate):
         }
 
     def extract_entity_from_code(self, code: str) -> Optional[str]:
-        """Extract entity name from Python code"""
+        """
+        Extract entity name from Python code using regex patterns.
+
+        Args:
+            code (str): The Python code to analyze
+
+        Returns:
+            Optional[str]: Extracted entity name or None if no entity could be identified
+        """
         # Pattern for model imports
         model_import = re.search(r"from\s+.*models?\s+import\s+(\w+)", code)
         if model_import:
@@ -94,7 +135,22 @@ class PythonTemplate(LanguageTemplate):
         entity_description: str,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Generate a specific Python component using PromptManager templates"""
+        """
+        Generate a specific Python component using prompt templates.
+
+        Args:
+            component_type (str): Type of component to generate (endpoint, model, etc.)
+            project_id (str): Identifier for the project being modified
+            entity_name (str): Name of the entity the component is for
+            entity_description (str): Natural language description of the entity
+            **kwargs: Additional parameters for component generation
+
+        Returns:
+            Dict[str, Any]: Component data including generated code, file path, and metadata
+
+        Raises:
+            ValueError: If an unknown component type is requested
+        """
         # Map component types to template names in PromptManager
         template_map = {
             "endpoint": "endpoint",
@@ -147,7 +203,12 @@ class PythonTemplate(LanguageTemplate):
         return result
 
     def get_commit_strategy(self) -> Dict[str, Any]:
-        """Get commit strategy for Python components"""
+        """
+        Get strategy for committing Python components to version control.
+
+        Returns:
+            Dict[str, Any]: Commit strategy with component order and message templates
+        """
         return {
             "components": ["model", "schema", "migration", "helpers", "endpoint"],
             "commit_order": ["model", "schema", "migration", "helpers", "endpoint"],
@@ -161,6 +222,14 @@ class PythonTemplate(LanguageTemplate):
         }
 
     def _to_snake_case(self, name: str) -> str:
-        """Convert string to snake_case"""
+        """
+        Convert string to snake_case following Python naming conventions.
+
+        Args:
+            name (str): Input string to convert
+
+        Returns:
+            str: String converted to snake_case
+        """
         s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
         return re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()

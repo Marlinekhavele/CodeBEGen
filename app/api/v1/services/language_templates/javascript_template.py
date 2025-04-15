@@ -10,10 +10,21 @@ class JavaScriptTemplate(LanguageTemplate):
     """JavaScript-specific implementation of language template"""
 
     def get_file_extension(self) -> str:
+        """
+        Get the standard file extension for JavaScript files.
+
+        Returns:
+            str: File extension for JavaScript ("js")
+        """
         return "js"
 
     def get_component_map(self) -> Dict[str, Optional[str]]:
-        """Map abstract components to JavaScript-specific components"""
+        """
+        Map abstract components to JavaScript-specific components.
+
+        Returns:
+            Dict[str, Optional[str]]: Mapping of abstract component types to JavaScript-specific ones
+        """
         return {
             "endpoint": "controller",  # In JS, endpoints are controllers
             "model": "model",
@@ -24,11 +35,24 @@ class JavaScriptTemplate(LanguageTemplate):
         }
 
     def get_required_components(self) -> List[str]:
-        """Get components required for JavaScript Express applications"""
+        """
+        Get components required for JavaScript Express applications.
+
+        Returns:
+            List[str]: List of required JavaScript component types
+        """
         return ["controller", "model", "validation", "utils", "route"]
 
     def needs_database(self, code: str) -> bool:
-        """Check if the JavaScript controller code needs database models"""
+        """
+        Check if the JavaScript controller code needs database models.
+
+        Args:
+            code (str): The JavaScript code to analyze
+
+        Returns:
+            bool: True if the code references database operations
+        """
         db_patterns = [
             r"require\(['\"]\.\./models/",
             r"import\s+.*\s+from\s+['\"]\.\./models/",
@@ -50,7 +74,16 @@ class JavaScriptTemplate(LanguageTemplate):
         return False
 
     def get_component_paths(self, project_id: str, entity_name: str) -> Dict[str, str]:
-        """Get file paths for JavaScript components"""
+        """
+        Get file paths for JavaScript components.
+
+        Args:
+            project_id (str): Identifier for the project being modified
+            entity_name (str): Name of the entity to generate paths for
+
+        Returns:
+            Dict[str, str]: Mapping of component types to their file paths
+        """
         pascal_case_entity = self._to_pascal_case(entity_name)
         kebab_case_entity = self._to_kebab_case(entity_name)
 
@@ -64,7 +97,15 @@ class JavaScriptTemplate(LanguageTemplate):
         }
 
     def extract_entity_from_code(self, code: str) -> Optional[str]:
-        """Extract entity name from JavaScript code"""
+        """
+        Extract entity name from JavaScript code.
+
+        Args:
+            code (str): The JavaScript code to analyze
+
+        Returns:
+            Optional[str]: Extracted entity name or None if no entity could be identified
+        """
         # CommonJS import pattern
         model_import = re.search(
             r"(const|let|var)\s+(\w+)\s*=\s*require\(['\"]\.\.\/models\/(\w+)['\"]",
@@ -100,7 +141,22 @@ class JavaScriptTemplate(LanguageTemplate):
         entity_description: str,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Generate a specific JavaScript component using PromptManager templates"""
+        """
+        Generate a specific JavaScript component using PromptManager templates.
+
+        Args:
+            component_type (str): Type of component to generate
+            project_id (str): Identifier for the project being modified
+            entity_name (str): Name of the entity the component is for
+            entity_description (str): Natural language description of the entity
+            **kwargs: Additional parameters for component generation
+
+        Returns:
+            Dict[str, Any]: Component data including generated code and metadata
+
+        Raises:
+            ValueError: If an unknown component type is requested
+        """
         # Map component types to PromptManager template names
         template_map = {
             "controller": "endpoint",  # In PromptManager templates, this is called "endpoint"
@@ -173,7 +229,18 @@ class JavaScriptTemplate(LanguageTemplate):
         entity_description: str,
         controller_code: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Generate a JavaScript Express route file"""
+        """
+        Generate a JavaScript Express route file.
+
+        Args:
+            project_id (str): Identifier for the project being modified
+            entity_name (str): Name of the entity to create routes for
+            entity_description (str): Natural language description of the entity
+            controller_code (Optional[str]): Optional controller code to extract routes from
+
+        Returns:
+            Dict[str, Any]: Route component data including generated code and metadata
+        """
         # Create a custom prompt for Express.js routes
         route_prompt = f"""
         Generate an Express.js route file for {entity_name}.
@@ -200,7 +267,12 @@ class JavaScriptTemplate(LanguageTemplate):
         return result
 
     def get_commit_strategy(self) -> Dict[str, Any]:
-        """Get commit strategy for JavaScript components"""
+        """
+        Get commit strategy for JavaScript components.
+
+        Returns:
+            Dict[str, Any]: Commit strategy with component order and message templates
+        """
         return {
             "components": [
                 "model",
@@ -229,14 +301,30 @@ class JavaScriptTemplate(LanguageTemplate):
         }
 
     def _to_pascal_case(self, name: str) -> str:
-        """Convert string to PascalCase"""
+        """
+        Convert string to PascalCase.
+
+        Args:
+            name (str): Input string to convert
+
+        Returns:
+            str: String converted to PascalCase
+        """
         # First convert to camelCase
         camel = "".join(word.capitalize() for word in re.split(r"[_\-\s]", name))
         # Ensure first letter is uppercase
         return camel[0].upper() + camel[1:]
 
     def _to_kebab_case(self, name: str) -> str:
-        """Convert string to kebab-case"""
+        """
+        Convert string to kebab-case.
+
+        Args:
+            name (str): Input string to convert
+
+        Returns:
+            str: String converted to kebab-case
+        """
         # Convert camelCase or PascalCase to kebab-case
         s1 = re.sub("(.)([A-Z][a-z]+)", r"\1-\2", name)
         s2 = re.sub("([a-z0-9])([A-Z])", r"\1-\2", s1).lower()
@@ -244,6 +332,14 @@ class JavaScriptTemplate(LanguageTemplate):
         return re.sub(r"[_\s]", "-", s2).lower()
 
     def _generate_migration_name(self, entity_name: str) -> str:
-        """Generate a timestamped migration name"""
+        """
+        Generate a timestamped migration name.
+
+        Args:
+            entity_name (str): Name of the entity for the migration
+
+        Returns:
+            str: Timestamped migration name
+        """
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         return f"{timestamp}-create-{entity_name}"

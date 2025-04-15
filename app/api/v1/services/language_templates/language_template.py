@@ -13,7 +13,12 @@ class LanguageTemplate(ABC):
 
     @abstractmethod
     def get_file_extension(self) -> str:
-        """Get file extension for this language"""
+        """
+        Get file extension for this language.
+
+        Returns:
+            str: File extension without the leading dot
+        """
         pass
 
     @abstractmethod
@@ -22,9 +27,8 @@ class LanguageTemplate(ABC):
         Map abstract components to language-specific components.
 
         Returns:
-            Dictionary mapping abstract component names (endpoint, model, etc.) to
-            language-specific component names. If a component doesn't exist in this
-            language, it should map to None.
+            Dict[str, Optional[str]]: Dictionary mapping abstract component names to
+            language-specific component names
         """
         pass
 
@@ -34,7 +38,7 @@ class LanguageTemplate(ABC):
         Get list of components required for this language.
 
         Returns:
-            List of component names that should be generated for this language.
+            List[str]: List of component names that should be generated
         """
         pass
 
@@ -44,10 +48,10 @@ class LanguageTemplate(ABC):
         Determine if generated code needs database components.
 
         Args:
-            code: The generated code (usually endpoint/controller)
+            code (str): The generated code (usually endpoint/controller)
 
         Returns:
-            True if database components like models should be generated
+            bool: True if database components like models should be generated
         """
         pass
 
@@ -57,11 +61,11 @@ class LanguageTemplate(ABC):
         Get file paths for different components based on language conventions.
 
         Args:
-            project_id: The project ID
-            entity_name: The name of the entity/resource
+            project_id (str): The project ID
+            entity_name (str): The name of the entity/resource
 
         Returns:
-            Dictionary mapping component types to their file paths
+            Dict[str, str]: Dictionary mapping component types to their file paths
         """
         pass
 
@@ -71,10 +75,10 @@ class LanguageTemplate(ABC):
         Extract entity name from generated code using language-specific patterns.
 
         Args:
-            code: The generated code
+            code (str): The generated code
 
         Returns:
-            Entity name if found, None otherwise
+            Optional[str]: Entity name if found, None otherwise
         """
         pass
 
@@ -91,14 +95,14 @@ class LanguageTemplate(ABC):
         Generate a specific component for this language.
 
         Args:
-            component_type: Type of component to generate (controller, model, etc.)
-            project_id: The project ID
-            entity_name: The name of the entity/resource
-            entity_description: Description of the entity
+            component_type (str): Type of component to generate
+            project_id (str): The project ID
+            entity_name (str): The name of the entity/resource
+            entity_description (str): Description of the entity
             **kwargs: Additional parameters needed for generation
 
         Returns:
-            Dictionary with generated code and metadata
+            Dict[str, Any]: Dictionary with generated code and metadata
         """
         pass
 
@@ -108,7 +112,7 @@ class LanguageTemplate(ABC):
         Get strategy for committing files based on language best practices.
 
         Returns:
-            Dictionary with commit strategy information
+            Dict[str, Any]: Dictionary with commit strategy information
         """
         pass
 
@@ -117,10 +121,10 @@ class LanguageTemplate(ABC):
         Check if this language supports a given abstract component.
 
         Args:
-            abstract_component: The abstract component name
+            abstract_component (str): The abstract component name
 
         Returns:
-            True if the language has this component, False otherwise
+            bool: True if the language has this component, False otherwise
         """
         component_map = self.get_component_map()
         return (
@@ -133,10 +137,10 @@ class LanguageTemplate(ABC):
         Get language-specific component name for an abstract component.
 
         Args:
-            abstract_component: The abstract component name
+            abstract_component (str): The abstract component name
 
         Returns:
-            Language-specific component name or None if not supported
+            Optional[str]: Language-specific component name or None if not supported
         """
         component_map = self.get_component_map()
         return component_map.get(abstract_component)
@@ -146,7 +150,7 @@ class LanguageTemplate(ABC):
         Get all supported abstract component types.
 
         Returns:
-            Set of abstract component names
+            Set[str]: Set of abstract component names
         """
         return set(
             key for key, value in self.get_component_map().items() if value is not None
@@ -157,7 +161,7 @@ class LanguageTemplate(ABC):
         Get all language-specific component types.
 
         Returns:
-            Set of language-specific component names
+            Set[str]: Set of language-specific component names
         """
         return set(
             value for value in self.get_component_map().values() if value is not None
@@ -165,17 +169,19 @@ class LanguageTemplate(ABC):
 
 
 class LanguageTemplateFactory:
-    """Factory for creating language-specific templates"""
+    """
+    Factory for creating language-specific templates.
+    """
 
     _templates = {}
 
     @classmethod
     def register_template(cls, language: str, template_class):
         """
-        Register a language template class
+        Register a language template class.
 
         Args:
-            language: Language identifier
+            language (str): Language identifier
             template_class: Template class to register
         """
         cls._templates[language.lower()] = template_class
@@ -186,10 +192,10 @@ class LanguageTemplateFactory:
         Get the appropriate template for the specified language.
 
         Args:
-            language: The programming language
+            language (str): The programming language identifier
 
         Returns:
-            Language template instance
+            LanguageTemplate: Instantiated language template
         """
         # Import templates here to avoid circular imports
         from app.api.v1.services.language_templates.javascript_template import (
@@ -226,10 +232,10 @@ class LanguageTemplateFactory:
     @classmethod
     def get_supported_languages(cls) -> List[str]:
         """
-        Get list of supported languages
+        Get list of supported languages.
 
         Returns:
-            List of supported language identifiers
+            List[str]: List of supported language identifiers
         """
         # Ensure templates are registered
         if not cls._templates:

@@ -2,9 +2,8 @@ import pytest
 import tempfile
 import os
 import json
-from unittest.mock import Mock, patch, AsyncMock
-from app.api.v1.services.model_schema_update_service import ModelSchemaManager, FieldChangeType
-from app.api.v1.services.langchain_service import LangchainService
+from unittest.mock import patch, AsyncMock
+from app.api.v1.services.model_schema_update_service import ModelSchemaManager
 
 
 @pytest.fixture

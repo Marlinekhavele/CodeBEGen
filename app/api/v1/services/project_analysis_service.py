@@ -110,7 +110,7 @@ class ProjectAnalysisService:
             project_dir (Path): The project directory.
             analysis (Dict[str, Any]): Analysis dictionary to populate.
         """
-        controllers_dir = project_dir /  "controllers"
+        controllers_dir = project_dir / "controllers"
         if controllers_dir.exists():
             analysis["endpoints"] = ProjectAnalysisService._analyze_js_controllers(
                 controllers_dir
@@ -726,9 +726,8 @@ class ProjectAnalysisService:
                                 {
                                     "name": class_name,
                                     "file": file,
-                                    "table_name": class_name.lower()
-                                    + "s", 
-                                    "fields": [], 
+                                    "table_name": class_name.lower() + "s",
+                                    "fields": [],
                                 }
                             )
 
@@ -873,7 +872,6 @@ class ProjectAnalysisService:
 
                     except SyntaxError as e:
                         logger.error(f"Syntax error parsing {file_path}: {str(e)}")
-                        
 
         logger.info(
             f"Found a total of {len(models)} models: {[m['name'] for m in models]}"
@@ -911,7 +909,7 @@ class ProjectAnalysisService:
                             content = f.read()
                     except IOError as io_error:
                         logger.error(f"Error reading file {file_path}: {str(io_error)}")
-                        continue  
+                        continue
 
                     # Extract class names
                     class_names = ProjectAnalysisService._extract_class_names(content)
@@ -937,7 +935,7 @@ class ProjectAnalysisService:
             Optional[str]: The detected HTTP method in uppercase (e.g., "GET", "POST"),
                           or None if no method could be detected
         """
-        
+
         method_patterns = [
             r"@router\.get\s*\(",
             r"@router\.post\s*\(",

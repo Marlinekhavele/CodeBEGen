@@ -14,6 +14,8 @@ from langchain_core.runnables import RunnablePassthrough
 
 from app.api.v1.utils.prompt_manager import PromptManager
 from config import settings
+import datetime
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -584,9 +586,7 @@ class LangchainService:
                 model_code=model_code or "# Model code not provided",
             )
 
-            # Generate a unique filename for the migration (for backward compatibility)
-            import datetime
-            import uuid
+          
 
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             revision_id = uuid.uuid4().hex[:8]

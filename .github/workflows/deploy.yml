@@ -5,16 +5,15 @@ on:
   pull_request:
     types: [ closed ]
     branches: [ main ]
-
 jobs:
   deploy:
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
-    
+   
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        
+       
       - name: Deploy to Azure Server
         uses: appleboy/ssh-action@master
         with:
@@ -23,43 +22,37 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             # Navigate to project directory
-            cd CodeGenBe
-            
+            cd CodeBEGen
+           
             # Update code from repository
             git pull origin main
-
+            
             # Create virtual environment if it doesn't exist
             python3 -m venv .venv
-        
+       
             # Activate virtual environment
             source .venv/bin/activate
-            
+           
             # Install dependencies with Poetry
             poetry install
-            
+           
             # Update environment file with GitHub secrets
             cat > .env << EOL
             SECRET_KEY=${{ secrets.SECRET_KEY }}
             ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY}}
             ENVIRONMENT=production
             EOL
-            
+           
             # Ensure proper permissions for env file
             chmod 600 .env
+           
+            # Restart the FastAPI service using systemd
+            echo "Restarting FastAPI service..."
+            sudo systemctl restart fastapi.service
             
-            # Check if app is already running
-            if pgrep -f "python main.py" > /dev/null; then
-              echo "Stopping existing application..."
-              pkill -f "python main.py"
-              # Wait for process to stop
-              sleep 5
-            fi
-            
-            # Start application in background
-            nohup poetry run python main.py > app.log 2>&1 &
-            
-            echo "Deployment complete! Application is running."
-      
+            # Wait a few seconds to ensure service has time to start
+            sleep 5
+     
       - name: Verify Deployment
         uses: appleboy/ssh-action@master
         with:
@@ -67,17 +60,14 @@ jobs:
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd CodeGenBe
+            # Check if the service is running properly
+            SERVICE_STATUS=$(sudo systemctl is-active fastapi.service)
             
-            # Wait for application to start
-            sleep 10
-            
-            # Check if process is running
-            if pgrep -f "python main.py" > /dev/null; then
-              echo "Application is running successfully!"
+            if [ "$SERVICE_STATUS" = "active" ]; then
+              echo "FastAPI service is running successfully!"
               exit 0
             else
-              echo "Application failed to start. Check logs."
-              cat app.log
+              echo "FastAPI service failed to start. Checking logs..."
+              sudo journalctl -u fastapi.service -n 20
               exit 1
             fi

@@ -1,0 +1,19 @@
+{
+  "copy_dirs": [
+    "core",
+    "endpoints",
+    "models",
+    "schemas",
+    "helpers",
+    "alembic"
+  ],
+  "copy_files": [
+    "main.py",
+    "requirements.txt",
+    "alembic.ini",
+    ".gitignore"
+  ],
+  "post_install": [
+    "pip install -r requirements.txt"
+  ]
+}

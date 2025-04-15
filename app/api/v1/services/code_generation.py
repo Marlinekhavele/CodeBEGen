@@ -248,7 +248,26 @@ class CodeGenerationService:
         endpoint_path,
         additional_context,
     ):
-        """Generate the primary component (endpoint/controller)"""
+        """
+        Generate the primary component (endpoint/controller) for the requested feature.
+
+        This method creates the main entry point component (such as an API endpoint,
+        controller, or route handler) based on the user's prompt and selected language.
+
+        Args:
+            language_template: Template for the target programming language
+            project_id: Identifier for the project being modified
+            prompt: Natural language description of the desired functionality
+            method: HTTP method for the endpoint (GET, POST, etc.)
+            endpoint_path: URL path for the endpoint
+            additional_context: Any supplementary information to guide generation
+
+        Returns:
+            Dict: Component data including generated code, file path, and metadata
+
+        Raises:
+            ValueError: If the selected language doesn't support endpoints/controllers
+        """
         # Get the endpoint component type for this language
         endpoint_component = language_template.get_component_map().get("endpoint")
         if not endpoint_component:
@@ -267,7 +286,20 @@ class CodeGenerationService:
         )
 
     def _extract_entity_name(self, language_template, primary_component):
-        """Extract entity name from the generated code"""
+        """
+        Extract entity name from the generated code using language-specific extraction rules.
+
+        This method analyzes the primary component code to determine the main entity
+        name (e.g., User, Product, Order) that the generated code is operating on.
+        This entity name is used for naming all related components.
+
+        Args:
+            language_template: Template for the target programming language
+            primary_component: Dictionary containing the generated primary component
+
+        Returns:
+            str: The extracted entity name or "User" as a fallback if extraction fails
+        """
         extracted_name = language_template.extract_entity_from_code(
             primary_component.get("generated_code", "")
         )
@@ -281,7 +313,22 @@ class CodeGenerationService:
         needs_database,
         component_type,
     ):
-        """Initialize the result dictionary with common fields"""
+        """
+        Initialize the result dictionary with common fields and primary component data.
+
+        This method creates the base structure for the generation result that will be
+        populated with all generated components and metadata throughout the generation process.
+
+        Args:
+            primary_component: Dictionary containing the generated primary component
+            language_template: Template for the target programming language
+            entity_name: Name of the main entity being operated on
+            needs_database: Boolean indicating if database components are required
+            component_type: Type of the primary component (endpoint, controller, etc.)
+
+        Returns:
+            Dict: Initialized result dictionary with primary component and metadata
+        """
         return {
             component_type: primary_component,
             "language": language_template.get_file_extension(),
@@ -300,7 +347,25 @@ class CodeGenerationService:
         language,
         language_template,
     ):
-        """Handle updates to an existing model"""
+        """
+        Handle updates to an existing model when generating code for an entity that already exists.
+
+        This method checks for an existing model and determines if updates are needed based
+        on the new endpoint's requirements. If updates are needed, it generates schema changes
+        and migrations to accommodate the new functionality while preserving existing data.
+
+        Args:
+            result: Dictionary to store generation results
+            project_id: Identifier for the project being modified
+            entity_name: Name of the entity being updated
+            prompt: Natural language description of the desired functionality
+            primary_component: Dictionary containing the generated primary component
+            language: Target programming language
+            language_template: Template for the target programming language
+
+        Returns:
+            None: Results are added directly to the result dictionary
+        """
         await self._notify_info(
             f"Found existing model for {entity_name}, checking for updates..."
         )
@@ -328,7 +393,21 @@ class CodeGenerationService:
     async def _process_model_updates(
         self, result, update_result, entity_name, project_id
     ):
-        """Process model updates and add to result"""
+        """
+        Process model updates and add them to the result dictionary.
+
+        This method handles the results of model updates, including updating the
+        model itself, schemas, and generating migrations when necessary.
+
+        Args:
+            result: Dictionary to store generation results
+            update_result: Dictionary containing model update details
+            entity_name: Name of the entity being updated
+            project_id: Identifier for the project being modified
+
+        Returns:
+            None: Results are added directly to the result dictionary
+        """
         # Add model update details
         result["model"] = {
             "exists": True,
@@ -369,7 +448,26 @@ class CodeGenerationService:
         method,
         endpoint_path,
     ):
-        """Generate new components for an entity"""
+        """
+        Generate new components for an entity that doesn't already exist in the project.
+
+        This method creates all necessary components for a new entity based on the
+        language template's requirements. This typically includes models, schemas,
+        validation rules, helper functions, and migrations as appropriate for the language.
+
+        Args:
+            result: Dictionary to store generation results
+            language_template: Template for the target programming language
+            project_id: Identifier for the project being modified
+            entity_name: Name of the entity to create
+            prompt: Natural language description of the desired functionality
+            primary_component: Dictionary containing the generated primary component
+            method: HTTP method for the endpoint (GET, POST, etc.)
+            endpoint_path: URL path for the endpoint
+
+        Returns:
+            None: Results are added directly to the result dictionary
+        """
         await self._notify_info(f"Generating new components for {entity_name}")
 
         # Get required components for this language
@@ -421,7 +519,27 @@ class CodeGenerationService:
         entity_description,
         **kwargs,
     ):
-        """Generate a specific component using the language template"""
+        """
+        Generate a specific component using the language template and notify progress.
+
+        This method handles the generation of an individual component (e.g., model, schema)
+        using the language-specific template and triggers appropriate events to notify
+        progress to listeners.
+
+        Args:
+            language_template: Template for the target programming language
+            component_type: Type of component to generate (model, schema, etc.)
+            project_id: Identifier for the project being modified
+            entity_name: Name of the entity the component is for
+            entity_description: Natural language description of the entity
+            **kwargs: Additional parameters for component generation (varies by component type)
+
+        Returns:
+            Dict: Component data including generated code, file path, and metadata
+
+        Raises:
+            Exception: Any errors during component generation are logged and re-raised
+        """
         try:
             # Notify component generation start
             await self._notify_event(
@@ -448,7 +566,23 @@ class CodeGenerationService:
             raise
 
     async def _check_for_existing_model(self, project_id, entity_name):
-        """Check if an entity already exists in the project"""
+        """
+        Check if an entity model already exists in the project.
+
+        This method analyzes the project structure to find existing model definitions
+        that match the requested entity name, using fuzzy matching to handle variations
+        in naming conventions.
+
+        Args:
+            project_id: Identifier for the project being checked
+            entity_name: Name of the entity to look for
+
+        Returns:
+            Dict or None: Existing model data if found, None otherwise
+
+        Raises:
+            Exception: Errors during project analysis are caught and logged
+        """
         try:
             # Analyze project to find existing models
             project_analysis = await ProjectAnalysisService.analyze_project(project_id)
@@ -464,7 +598,27 @@ class CodeGenerationService:
     async def _check_and_update_existing_model(
         self, project_id, entity_name, prompt_description, endpoint_code, language
     ):
-        """Check if entity already exists and update it if needed"""
+        """
+        Check if entity already exists and update it if needed based on the new endpoint.
+
+        This method analyzes the requested endpoint functionality against an existing model
+        to determine if modifications are needed. If changes are required, it generates
+        updates to the model and related schema, and may create a migration.
+
+        Args:
+            project_id: Identifier for the project being modified
+            entity_name: Name of the entity to check and potentially update
+            prompt_description: Natural language description of the desired functionality
+            endpoint_code: Generated code for the endpoint/controller
+            language: Target programming language
+
+        Returns:
+            Dict or None: Update results if updates were made, None if no updates needed
+                or if the model doesn't exist
+
+        Raises:
+            Exception: Errors during model updating are caught and logged
+        """
         try:
             # Verify the model exists
             existing_model = await self._check_for_existing_model(
@@ -532,7 +686,23 @@ class CodeGenerationService:
             return None
 
     async def _commit_updated_files(self, project_id, files_to_commit):
-        """Commit updated files to Git repository"""
+        """
+        Commit updated files to Git repository individually.
+
+        This method handles committing multiple files to Git with individual commit
+        messages, typically used when updating existing models and related components.
+
+        Args:
+            project_id: Identifier for the project repository
+            files_to_commit: List of dictionaries containing file paths, content, and commit messages
+
+        Returns:
+            Dict: Results of commit operations by file path
+
+        Raises:
+            Exception: Errors during Git operations are caught and logged
+        """
+
         commit_results = {}
 
         try:
@@ -565,7 +735,27 @@ class CodeGenerationService:
     async def _commit_files_to_git(
         self, project_id, generation_result, language, language_template
     ):
-        """Commit all generated files to Git repository"""
+        """
+        Commit all generated files to Git repository following language-specific commit strategy.
+
+        This method handles committing all generated components to Git following a
+        language-specific commit strategy that defines the order and commit messages.
+        It attempts to use the language template's commit strategy first, and falls back
+        to a legacy approach if that fails.
+
+        Args:
+            project_id: Identifier for the project repository
+            generation_result: Dictionary containing all generated components
+            language: Target programming language
+            language_template: Template for the target programming language
+
+        Returns:
+            Dict: Results of commit operations by component type
+
+        Raises:
+            Exception: Errors in commit strategy are caught and handled by falling back
+                to the legacy commit method
+        """
         try:
             # Get commit strategy from language template
             commit_strategy = language_template.get_commit_strategy()
@@ -621,7 +811,20 @@ class CodeGenerationService:
             return await self._legacy_commit_files_to_git(project_id, generation_result)
 
     async def _legacy_commit_files_to_git(self, project_id, generation_result):
-        """Legacy method for committing files to Git (fallback)"""
+        """
+        Legacy method for committing files to Git (fallback strategy).
+
+        This method provides a fallback approach for committing generated files
+        when the language-specific commit strategy fails. It uses a predefined
+        component order and generic commit messages.
+
+        Args:
+            project_id: Identifier for the project repository
+            generation_result: Dictionary containing all generated components
+
+        Returns:
+            Dict: Results of commit operations by component type
+        """
         git_results = {}
 
         # Handle endpoints/controllers
@@ -712,7 +915,21 @@ class CodeGenerationService:
         return git_results
 
     async def _notify_event(self, event_type, component_type, data):
-        """Notify event callbacks for a component event"""
+        """
+        Notify event callbacks for a component generation event.
+
+        This method dispatches event notifications to registered callbacks when
+        component generation starts or completes. It attempts to call component-specific
+        callbacks first, then falls back to generic callbacks if available.
+
+        Args:
+            event_type (str): Type of event ("start" or "complete")
+            component_type (str): Type of component the event is for
+            data (Dict): Event data to pass to callbacks
+
+        Returns:
+            None
+        """
         callback_dict = (
             self.on_component_start
             if event_type == "start"
@@ -738,7 +955,19 @@ class CodeGenerationService:
                 logger.error(f"Error in generic {event_type} callback: {str(e)}")
 
     async def _notify_info(self, message):
-        """Send an info message through the callback if available"""
+        """
+        Send an informational message through the registered info callback.
+
+        This method sends status updates and progress information to the registered
+        info callback if one is available. These messages are useful for logging and
+        user interface updates during the code generation process.
+
+        Args:
+            message (str): Information message to send
+
+        Returns:
+            None
+        """
         if self.on_info:
             try:
                 await self.on_info(message)

@@ -1,3 +1,5 @@
+from sqlalchemy import Column, String, Boolean
+from core.database import Base
 from core.database import Base
 from sqlalchemy import Boolean, Column, String
 

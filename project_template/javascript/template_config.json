@@ -1,0 +1,15 @@
+{
+  "copy_dirs": [
+    "routes",
+    "models",
+    "controllers"
+  ],
+  "copy_files": [
+    "index.js",
+    "package.json",
+    ".gitignore"
+  ],
+  "post_install": [
+    "npm install"
+  ]
+}

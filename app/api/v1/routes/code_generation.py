@@ -18,27 +18,23 @@ logger = logging.getLogger(__name__)
 )
 async def generate_code(request: CodeGenerationRequest):
     """
-    Generate code based on user description.
+    Generates code based on a user-provided natural language description.
 
-    This unified endpoint handles all code generation requests.
-    The system will intelligently determine what needs to be generated based on the prompt.
+    This endpoint receives a CodeGenerationRequest containing a prompt and other optional
+    context about the desired output (e.g., endpoint, model, schema, etc.). It delegates
+    the generation task to the CodeGenerationService and returns the generated code.
 
-    - Parameters:
-      - project_id: Identifier for the project
-      - prompt: Natural language description of what should be generated
-      - language: Target programming language (python, typescript, etc.)
-      - method: HTTP method for endpoint generation (GET, POST, etc.) if applicable
-      - endpoint_path: Path for the endpoint if applicable
-      - additional_context: Optional context about the project or requirements
+    Args:
+        request (CodeGenerationRequest): Request object containing prompt, language, and other parameters.
 
-    - Returns:
-      All generated code components (endpoint, model, schema, etc.) as appropriate
+    Returns:
+        CodeGenerationResponse: Object containing the generated code components and metadata.
+
+    Raises:
+        HTTPException: If the code generation process fails due to an internal error.
     """
     try:
-        # Create an instance of CodeGenerationService
         code_gen_service = CodeGenerationService()
-
-        # Call the generate_code method on the instance
         result = await code_gen_service.generate_code(request)
         return result
     except Exception as e:
@@ -52,30 +48,34 @@ async def generate_code(request: CodeGenerationRequest):
 @router.websocket("/generate/stream")
 async def generate_code_stream(websocket: WebSocket):
     """
-    Stream code generation results as they're being generated.
+    Streams real-time code generation updates over WebSocket.
 
-    This WebSocket endpoint provides real-time streaming of generated code.
-    The system will intelligently determine what needs to be generated based on the prompt.
+    This WebSocket endpoint enables clients to receive progressive updates during
+    the code generation process. It accepts a JSON message matching the
+    CodeGenerationRequest schema and streams progress and completion messages as
+    components are generated.
 
-    The client should send a JSON message with the same structure as the CodeGenerationRequest.
-    The server will respond with streaming updates as each component is generated.
+    Args:
+        websocket (WebSocket): The WebSocket connection object.
+
+    Returns:
+        None
+
+    Raises:
+        WebSocketDisconnect: If the client disconnects during the code generation session.
+        Exception: If an unexpected error occurs during code generation.
     """
     await websocket.accept()
 
     try:
-        # Send initial connection confirmation
         await websocket.send_json(
             {"status": "connected", "message": "WebSocket connection established"}
         )
 
-        # Receive the request parameters as JSON
         data = await websocket.receive_text()
         params = json.loads(data)
-
-        # Log the received data
         logger.info(f"Received streaming request: {params}")
 
-        # Convert to request object for validation
         try:
             request = CodeGenerationRequest(**params)
         except Exception as e:
@@ -86,7 +86,6 @@ async def generate_code_stream(websocket: WebSocket):
             await websocket.close()
             return
 
-        # Define callback handlers for the CodeGenerationService
         async def on_component_start(component_type, data):
             entity_name = data.get("entity_name", "")
             message = (
@@ -94,7 +93,6 @@ async def generate_code_stream(websocket: WebSocket):
                 if entity_name
                 else f"Generating {component_type}..."
             )
-
             await websocket.send_json(
                 {"status": "progress", "stage": component_type, "message": message}
             )
@@ -107,7 +105,6 @@ async def generate_code_stream(websocket: WebSocket):
         async def on_info(message):
             await websocket.send_json({"status": "info", "message": message})
 
-        # Create an instance of CodeGenerationService with WebSocket callbacks
         code_gen_service = CodeGenerationService(
             on_endpoint_start=lambda event, data: on_component_start("endpoint", data),
             on_endpoint_complete=lambda event, data: on_component_complete(
@@ -132,10 +129,8 @@ async def generate_code_stream(websocket: WebSocket):
             on_info=on_info,
         )
 
-        # Generate the code using the same service as the regular endpoint
         response = await code_gen_service.generate_code(request)
 
-        # Send the final complete message
         await websocket.send_json(
             {
                 "status": "complete",
@@ -152,7 +147,6 @@ async def generate_code_stream(websocket: WebSocket):
         logger.info("WebSocket disconnected during code generation")
     except Exception as e:
         logger.error(f"Error in streaming code generation: {str(e)}", exc_info=True)
-        # Try to send error message if the connection is still open
         try:
             await websocket.send_json(
                 {"status": "error", "message": f"Code generation failed: {str(e)}"}

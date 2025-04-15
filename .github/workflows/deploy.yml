@@ -24,6 +24,7 @@ jobs:
           script: |
             # Navigate to project directory
             cd CodeBEGen
+            
             # Update code from repository
             git pull origin main
 
@@ -46,18 +47,51 @@ jobs:
             # Ensure proper permissions for env file
             chmod 600 .env
             
-            # Check if app is already running
-            if pgrep -f "python main.py" > /dev/null; then
-              echo "Stopping existing application..."
-              pkill -f "python main.py"
-              # Wait for process to stop
-              sleep 5
+            # Instead of killing the process, use a restart script approach
+            # Create a restart script
+            cat > restart.sh << 'EOSCRIPT'
+            #!/bin/bash
+            
+            # Check if app is already running and get its PID
+            APP_PID=$(pgrep -f "python main.py" || echo "")
+            
+            # Start new instance with different log file
+            echo "Starting new application instance..."
+            TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+            mkdir -p logs
+            nohup poetry run python main.py > logs/app_${TIMESTAMP}.log 2>&1 &
+            NEW_PID=$!
+            
+            # Give the new instance time to initialize
+            sleep 5
+            
+            # Check if new instance is running
+            if ps -p $NEW_PID > /dev/null; then
+              echo "New instance started successfully with PID: $NEW_PID"
+              
+              # Create symlink to latest log
+              ln -sf logs/app_${TIMESTAMP}.log app.log
+              
+              # Only terminate old instance if new one is running
+              if [ -n "$APP_PID" ]; then
+                echo "Gracefully terminating old instance with PID: $APP_PID"
+                kill $APP_PID
+              fi
+              
+              echo "Deployment complete!"
+              exit 0
+            else
+              echo "New instance failed to start properly. Check logs."
+              cat logs/app_${TIMESTAMP}.log
+              exit 1
             fi
+            EOSCRIPT
             
-            # Start application in background
-            nohup poetry run python main.py > app.log 2>&1 &
+            # Make script executable
+            chmod +x restart.sh
             
-            echo "Deployment complete! Application is running."
+            # Run the restart script
+            ./restart.sh
       
       - name: Verify Deployment
         uses: appleboy/ssh-action@master
@@ -67,9 +101,6 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd CodeBEGen
-            
-            # Wait for application to start
-            sleep 10
             
             # Check if process is running
             if pgrep -f "python main.py" > /dev/null; then

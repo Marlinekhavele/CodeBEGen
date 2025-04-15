@@ -1,6 +1,7 @@
+import asyncio
+
 import pytest
 from fastapi.testclient import TestClient
-import asyncio
 
 from main import app
 

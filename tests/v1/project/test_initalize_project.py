@@ -4,14 +4,21 @@ from app.api.v1.schemas.projects import ProjectInitResponse
 from app.api.v1.services.projects import ProjectInitService
 from conftest import TEST_BASE_URL
 
-valid_payload = {"project_name": "Test Project"}
+valid_payload = {
+    "project_name": "Test Project",
+    "language": "Python",
+    "framework": "FastAPI"
+}
 invalid_payload = {}
 
 
 def test_initialize_project_success(client):
     """Test project initialization success."""
     mock_response = ProjectInitResponse(
-        project_id="12345", project_url="http://project.test.com"
+        project_id="12345",
+        project_url="http://project.test.com",
+        language="Python",
+        framework="FastAPI"
     ).dict()
 
     with patch.object(

@@ -16,7 +16,6 @@ class ProjectInitResponse(BaseModel):
     project_url: str
     language: str
     framework: str
-   
 
 
 class ProjectInitSuccessResponse(SuccessResponse):

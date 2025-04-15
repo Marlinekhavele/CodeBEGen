@@ -2,8 +2,8 @@ import base64
 import hashlib
 import logging
 import os
-from typing import Any, Callable, Dict, List, Optional
 import re
+from typing import Any, Callable, Dict, List, Optional
 
 from langchain.prompts import PromptTemplate
 from langchain_anthropic import ChatAnthropic
@@ -12,8 +12,8 @@ from langchain_core.callbacks.streaming_stdout import StreamingStdOutCallbackHan
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 
-from config import settings
 from app.api.v1.utils.prompt_manager import PromptManager
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -134,38 +134,34 @@ class LangchainService:
 
     @staticmethod
     async def generate_code_with_template(
-        template_name: str,
-        language: str,
-        **template_vars
+        template_name: str, language: str, **template_vars
     ) -> Dict[str, Any]:
         """
         Generate code using a template from PromptManager
-        
+
         Args:
             template_name: The name of the template to use (endpoint, model, etc.)
             language: Programming language to generate code for
             **template_vars: Variables to pass to the template
-            
+
         Returns:
             Dictionary with generated code and metadata
         """
         try:
             # Format the template using PromptManager
             formatted_prompt = PromptManager.format_template(
-                template_name=template_name,
-                language=language,
-                **template_vars
+                template_name=template_name, language=language, **template_vars
             )
-            
+
             # Create a chain
             chain = LangchainService.create_chain_from_template("")
-            
+
             # Execute the chain with our formatted prompt
             result = await chain.ainvoke({"input": formatted_prompt})
-            
+
             # Clean the result
             cleaned_code = LangchainService.clean_code(result)
-            
+
             return {
                 "generated_code": cleaned_code,
                 "content_base64": LangchainService.encode_content(cleaned_code),
@@ -173,51 +169,55 @@ class LangchainService:
                 "file_hash": LangchainService.generate_file_hash(cleaned_code),
             }
         except Exception as e:
-            logger.error(f"Error in template-based code generation: {str(e)}", exc_info=True)
-            raise Exception(f"Failed to generate code with template {template_name}: {str(e)}")
+            logger.error(
+                f"Error in template-based code generation: {str(e)}", exc_info=True
+            )
+            raise Exception(
+                f"Failed to generate code with template {template_name}: {str(e)}"
+            )
 
     @staticmethod
     async def generate_custom_code(
         project_id: str,
         prompt: str,
         language: str = "python",
-        context: Optional[str] = None
+        context: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Generate custom code using a specific prompt
-        
+
         Args:
             project_id: The project ID
             prompt: Custom generation prompt
             language: Programming language
             context: Additional context code
-            
+
         Returns:
             Dictionary with generated code and metadata
         """
         try:
             # Add language-specific context
             language_context = LangchainService._get_language_context(language)
-            
+
             # Build the final prompt with all context
             final_prompt = f"""
             {language_context}
-            
+
             {prompt}
             """
-            
+
             if context:
                 final_prompt += f"\n\nReference code:\n{context}"
-            
+
             # Create a chain
             chain = LangchainService.create_chain_from_template("")
-            
+
             # Execute the chain with our formatted prompt
             result = await chain.ainvoke({"input": final_prompt})
-            
+
             # Clean the result
             cleaned_code = LangchainService.clean_code(result)
-            
+
             return {
                 "generated_code": cleaned_code,
                 "content_base64": LangchainService.encode_content(cleaned_code),
@@ -232,15 +232,15 @@ class LangchainService:
     def _get_language_context(language: str) -> str:
         """
         Get language-specific context for the LLM
-        
+
         Args:
             language: Programming language
-            
+
         Returns:
             Context string specific to the language
         """
         language = language.lower()
-        
+
         if language == "python":
             return """
             You are generating Python code for a FastAPI application.
@@ -278,34 +278,36 @@ class LangchainService:
             return f"You are generating {language} code. Follow best practices and conventions for {language}."
 
     @staticmethod
-    def _find_existing_model(entity_name: str, models_list: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def _find_existing_model(
+        entity_name: str, models_list: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
         """
         Find an existing model in the project that matches the entity name
-        
+
         Args:
             entity_name: The entity name to search for
             models_list: List of models from project analysis
-            
+
         Returns:
             Matching model or None if not found
         """
         # Normalize entity name for comparison
         entity_name_lower = entity_name.lower()
-        
+
         for model in models_list:
             model_name = model.get("name", "").lower()
-            
+
             # Check for exact match
             if model_name == entity_name_lower:
                 return model
-                
+
             # Check for singular/plural variations
-            if model_name.endswith('s') and model_name[:-1] == entity_name_lower:
+            if model_name.endswith("s") and model_name[:-1] == entity_name_lower:
                 return model
-                
-            if entity_name_lower.endswith('s') and entity_name_lower[:-1] == model_name:
+
+            if entity_name_lower.endswith("s") and entity_name_lower[:-1] == model_name:
                 return model
-                
+
         return None
 
     # The following methods are maintained for backward compatibility
@@ -332,17 +334,17 @@ class LangchainService:
                 additional_context=additional_context or "",
                 language=language,
             )
-            
+
             # Add backward compatibility fields
             path_segments = endpoint_path.strip("/").split("/")
             last_segment = path_segments[-1]
             file_extension = LangchainService.get_file_extension(language)
             file_path = f"endpoints/{last_segment}.{method.lower()}{file_extension}"
-            
+
             result["method"] = method
             result["endpoint_path"] = endpoint_path
             result["file_path"] = file_path
-            
+
             return result
 
         except Exception as e:
@@ -367,16 +369,17 @@ class LangchainService:
                 language=language,
                 entity_name=entity_name,
                 entity_description=entity_description,
-                endpoint_code=endpoint_code or "# Endpoint code not provided for context",
+                endpoint_code=endpoint_code
+                or "# Endpoint code not provided for context",
             )
-            
+
             # Add backward compatibility fields
             file_extension = LangchainService.get_file_extension(language)
             file_path = f"models/{entity_name.lower()}{file_extension}"
-            
+
             result["entity_name"] = entity_name
             result["file_path"] = file_path
-            
+
             return result
 
         except Exception as e:
@@ -403,14 +406,14 @@ class LangchainService:
                 endpoint_code=endpoint_code or "# Endpoint code not provided",
                 model_code=model_code or "# Model code not provided",
             )
-            
+
             # Add backward compatibility fields
             file_extension = LangchainService.get_file_extension(language)
             file_path = f"schemas/{entity_name.lower()}{file_extension}"
-            
+
             result["entity_name"] = entity_name
             result["file_path"] = file_path
-            
+
             return result
 
         except Exception as e:
@@ -453,7 +456,7 @@ class LangchainService:
                 latest_migration_id=latest_migration_id,
                 model_code=model_code or "# Model code not provided",
             )
-            
+
             # Generate a unique filename for the migration (for backward compatibility)
             import datetime
             import uuid
@@ -467,11 +470,11 @@ class LangchainService:
 
             # File path: alembic/versions/timestamp_revision_create_entity.[extension]
             file_path = f"alembic/versions/{filename}"
-            
+
             result["entity_name"] = entity_name
             result["file_path"] = file_path
             result["parent_migration_id"] = latest_migration_id
-            
+
             return result
 
         except Exception as e:
@@ -502,14 +505,14 @@ class LangchainService:
                 model_code=model_code or "# Model code not provided",
                 schema_code=schema_code or "# Schema code not provided",
             )
-            
+
             # Add backward compatibility fields
             file_extension = LangchainService.get_file_extension(language)
             file_path = f"helpers/{entity_name.lower()}_helpers{file_extension}"
-            
+
             result["entity_name"] = entity_name
             result["file_path"] = file_path
-            
+
             return result
 
         except Exception as e:
@@ -529,17 +532,19 @@ class LangchainService:
         """
         # Delegate to the appropriate language template if possible
         try:
-            from app.api.v1.services.language_templates.language_template import LanguageTemplateFactory
-            
+            from app.api.v1.services.language_templates.language_template import (
+                LanguageTemplateFactory,
+            )
+
             # Try to determine the language from the code
             language = "python"  # Default
             if "const " in code or "let " in code or "import " in code:
                 language = "javascript"
-                
+
             # Get the template and use its method
             template = LanguageTemplateFactory.get_template(language)
             return template.needs_database(code)
-            
+
         except ImportError:
             # Fallback to basic detection if language templates aren't available
             db_patterns = [
@@ -555,7 +560,7 @@ class LangchainService:
                 r"sequelize",
                 r"Model\.",
             ]
-            
+
             for pattern in db_patterns:
                 if re.search(pattern, code, re.IGNORECASE):
                     return True

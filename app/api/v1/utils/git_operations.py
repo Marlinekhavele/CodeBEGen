@@ -57,20 +57,24 @@ def run_git_command(command, cwd=None):
         logger.error(f"Error details: {error_msg}")
         raise Exception(f"Git command failed: {error_msg}")
 
+
 def load_template_config(language):
     """Load the template config JSON from the language folder, or fallback to default behavior."""
     config_path = BASE_TEMPLATE_DIR / language / "template_config.json"
     if not config_path.exists():
         raise ValueError(f"Missing config for language: {language} at {config_path}")
-    
+
     with open(config_path) as f:
         return json.load(f)
+
 
 def clone_template_repo(project_dir, language):
     """Initialize a project from a multi-language-aware template folder."""
     template_dir = BASE_TEMPLATE_DIR / language
     if not template_dir.exists():
-        raise ValueError(f"Template directory not found for language '{language}' at {template_dir}")
+        raise ValueError(
+            f"Template directory not found for language '{language}' at {template_dir}"
+        )
 
     config = load_template_config(language)
 
@@ -93,7 +97,10 @@ def clone_template_repo(project_dir, language):
     # Initialize git
     run_git_command(["git", "init"], cwd=project_dir)
     run_git_command(["git", "add", "."], cwd=project_dir)
-    run_git_command(["git", "commit", "-m", f"Initial commit for {language} template"], cwd=project_dir)
+    run_git_command(
+        ["git", "commit", "-m", f"Initial commit for {language} template"],
+        cwd=project_dir,
+    )
 
     logger.info(f"Successfully initialized {language} project at {project_dir}")
     return f"{language.capitalize()} project initialized."

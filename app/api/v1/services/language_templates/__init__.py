@@ -5,14 +5,16 @@ This package contains the templates for generating code in different programming
 Each language has its own template class that implements the LanguageTemplate abstract base class.
 """
 
+from app.api.v1.services.language_templates.javascript_template import (
+    JavaScriptTemplate,
+)
 from app.api.v1.services.language_templates.language_template import (
     LanguageTemplate,
-    LanguageTemplateFactory
+    LanguageTemplateFactory,
 )
 
 # Import all language templates to ensure they're registered with the factory
 from app.api.v1.services.language_templates.python_template import PythonTemplate
-from app.api.v1.services.language_templates.javascript_template import JavaScriptTemplate
 
 # Register all templates with the factory
 LanguageTemplateFactory.register_template("python", PythonTemplate)

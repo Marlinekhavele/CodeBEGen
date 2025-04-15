@@ -131,7 +131,7 @@ class ProjectInitService:
 
         # Create a proper URL with the slug and base URL
         project_url = f"https://{slug}.{settings.CODE_BE_GEN_BASE_URL}"
-        
+
         language = init_request.language
         framework = init_request.framework
 
@@ -219,4 +219,9 @@ class ProjectInitService:
             )
 
         # Return the response with the generated slug as repo_url and the formatted project_url
-        return ProjectInitResponse(project_id=slug, project_url=project_url,language=language,framework=framework)
+        return ProjectInitResponse(
+            project_id=slug,
+            project_url=project_url,
+            language=language,
+            framework=framework,
+        )

@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import shutil
@@ -13,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 # Define the base directory for repositories
 REPOS_DIR = Path("repos")
+BASE_TEMPLATE_DIR = Path(BASE_DIR) / "project_template"
 
 
 def ensure_repos_directory():
@@ -55,61 +57,46 @@ def run_git_command(command, cwd=None):
         logger.error(f"Error details: {error_msg}")
         raise Exception(f"Git command failed: {error_msg}")
 
+def load_template_config(language):
+    """Load the template config JSON from the language folder, or fallback to default behavior."""
+    config_path = BASE_TEMPLATE_DIR / language / "template_config.json"
+    if not config_path.exists():
+        raise ValueError(f"Missing config for language: {language} at {config_path}")
+    
+    with open(config_path) as f:
+        return json.load(f)
 
-def clone_template_repo(project_dir, template_repo_url=None):
-    """Initialize new project from local template"""
+def clone_template_repo(project_dir, language):
+    """Initialize a project from a multi-language-aware template folder."""
+    template_dir = BASE_TEMPLATE_DIR / language
+    if not template_dir.exists():
+        raise ValueError(f"Template directory not found for language '{language}' at {template_dir}")
 
-    # Always use local template in production
-    logger.info(f"Creating project from local template at {project_dir}")
+    config = load_template_config(language)
 
-    template_dir = Path(BASE_DIR) / "project_template"
-
+    logger.info(f"Creating {language} project from template at {project_dir}")
     logger.info(f"Using template directory: {template_dir.absolute()}")
 
-    # Check if the template directory exists
-    if not template_dir.exists():
-        raise ValueError(f"Template directory not found at {template_dir.absolute()}")
+    # Copy directories
+    for dir_name in config.get("copy_dirs", []):
+        src_dir = template_dir / dir_name
+        if not src_dir.exists():
+            raise ValueError(f"Missing directory in template: {src_dir}")
+        shutil.copytree(src_dir, project_dir / dir_name, dirs_exist_ok=True)
 
-    # Check if the endpoints directory exists
-    if not (template_dir / "endpoints").exists():
-        raise ValueError(
-            f"Endpoints directory not found at {template_dir / 'endpoints'}"
-        )
+    # Copy files
+    for file_name in config.get("copy_files", []):
+        src_file = template_dir / file_name
+        if src_file.exists():
+            shutil.copy(src_file, project_dir / file_name)
 
-    # Copy core components with conflict handling
-    shutil.copytree(template_dir / "core", project_dir / "core", dirs_exist_ok=True)
-    shutil.copytree(
-        template_dir / "endpoints", project_dir / "endpoints", dirs_exist_ok=True
-    )
-    shutil.copytree(template_dir / "models", project_dir / "models", dirs_exist_ok=True)
-    shutil.copytree(
-        template_dir / "schemas", project_dir / "schemas", dirs_exist_ok=True
-    )
-    shutil.copytree(
-        template_dir / "helpers", project_dir / "helpers", dirs_exist_ok=True
-    )
-    shutil.copytree(
-        template_dir / "alembic", project_dir / "alembic", dirs_exist_ok=True
-    )
-
-    # Copy main.py and requirements.txt
-    shutil.copy(template_dir / "main.py", project_dir / "main.py")
-    shutil.copy(template_dir / "requirements.txt", project_dir / "requirements.txt")
-    shutil.copy(template_dir / "alembic.ini", project_dir / "alembic.ini")
-
-    # Copy .gitignore if it exists
-    if (template_dir / ".gitignore").exists():
-        shutil.copy(template_dir / ".gitignore", project_dir / ".gitignore")
-
-    # Initialize bare git repo
+    # Initialize git
     run_git_command(["git", "init"], cwd=project_dir)
     run_git_command(["git", "add", "."], cwd=project_dir)
-    run_git_command(
-        ["git", "commit", "-m", "Initial commit from template"], cwd=project_dir
-    )
+    run_git_command(["git", "commit", "-m", f"Initial commit for {language} template"], cwd=project_dir)
 
-    logger.info(f"Successfully initialized project at {project_dir}")
-    return "Project initialized from local template"
+    logger.info(f"Successfully initialized {language} project at {project_dir}")
+    return f"{language.capitalize()} project initialized."
 
 
 def update_git_remote(project_dir, new_repo_url):

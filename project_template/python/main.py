@@ -1,8 +1,7 @@
-from pathlib import Path
-
-from core.router import load_endpoints
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware  # New import
+from pathlib import Path
+from core.router import load_endpoints
 
 app = FastAPI(title="API Starter Template")
 
@@ -18,7 +17,6 @@ app.add_middleware(
 # Load all endpoints
 app.include_router(load_endpoints(Path("endpoints")))
 
-
 @app.get("/")
 def root():
     return {
@@ -26,6 +24,6 @@ def root():
         "endpoints": {
             "health": "/health (GET)",
             "login": "/login (POST)",
-            "signup": "/signup (POST)",
-        },
+            "signup": "/signup (POST)"
+        }
     }

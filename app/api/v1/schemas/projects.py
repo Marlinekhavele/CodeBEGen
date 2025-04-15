@@ -7,11 +7,16 @@ from app.api.v1.schemas.response import SuccessResponse
 
 class ProjectInitRequest(BaseModel):
     project_name: str
+    language: str
+    framework: str
 
 
 class ProjectInitResponse(BaseModel):
     project_id: str
     project_url: str
+    language: str
+    framework: str
+   
 
 
 class ProjectInitSuccessResponse(SuccessResponse):

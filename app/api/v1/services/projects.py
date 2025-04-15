@@ -131,6 +131,9 @@ class ProjectInitService:
 
         # Create a proper URL with the slug and base URL
         project_url = f"https://{slug}.{settings.CODE_BE_GEN_BASE_URL}"
+        
+        language = init_request.language
+        framework = init_request.framework
 
         # Create Gitea repository (if credentials are provided)
         repo_url = ""
@@ -146,7 +149,7 @@ class ProjectInitService:
                 project_dir = create_project_directory(slug)
 
                 # Clone the template repository
-                clone_template_repo(project_dir)
+                clone_template_repo(project_dir, language)
 
                 # Configure Git for the project
                 configure_git_for_project(project_dir)
@@ -216,4 +219,4 @@ class ProjectInitService:
             )
 
         # Return the response with the generated slug as repo_url and the formatted project_url
-        return ProjectInitResponse(project_id=slug, project_url=project_url)
+        return ProjectInitResponse(project_id=slug, project_url=project_url,language=language,framework=framework)

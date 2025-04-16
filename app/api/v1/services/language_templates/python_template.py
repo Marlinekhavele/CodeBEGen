@@ -1,8 +1,11 @@
+import logging
 import re
 from typing import Any, Dict, List, Optional
 
 from app.api.v1.services.langchain_service import LangchainService
 from app.api.v1.services.language_templates.language_template import LanguageTemplate
+
+logger = logging.getLogger(__name__)
 
 
 class PythonTemplate(LanguageTemplate):
@@ -108,7 +111,9 @@ class PythonTemplate(LanguageTemplate):
             if model_import:
                 return model_import.group(1)
             # Pattern for model imports (relative/specific imports)
-            model_import_specific = re.search(r"from\s+models\.(\w+)\s+import\s+(\w+)", code)
+            model_import_specific = re.search(
+                r"from\s+models\.(\w+)\s+import\s+(\w+)", code
+            )
             if model_import_specific:
                 return model_import_specific.group(2)
             # Pattern for db queries
@@ -116,7 +121,9 @@ class PythonTemplate(LanguageTemplate):
             if db_query:
                 return db_query.group(1)
             # Pattern for schema imports (specific path)
-            schema_import = re.search(r"from\s+schemas\.(\w+)\s+import\s+(\w+)Schema", code)
+            schema_import = re.search(
+                r"from\s+schemas\.(\w+)\s+import\s+(\w+)Schema", code
+            )
             if schema_import:
                 return schema_import.group(2)
             # Pattern for schema usage
@@ -146,7 +153,9 @@ class PythonTemplate(LanguageTemplate):
                     entity = entity[:-1]
                 return entity.capitalize()
             # Look for common CRUD operation functions
-            crud_function = re.search(r"def\s+(?:get|create|update|delete|find)_?(\w+)", code)
+            crud_function = re.search(
+                r"def\s+(?:get|create|update|delete|find)_?(\w+)", code
+            )
             if crud_function:
                 entity = crud_function.group(1)
                 if entity.endswith("s"):
@@ -170,6 +179,7 @@ class PythonTemplate(LanguageTemplate):
                 return function_params.group(1).capitalize()
             return None
         except Exception as e:
+            logger.error(f"Error extracting entity from code: {str(e)}")
             # Log the exception but don't crash
             return None
 

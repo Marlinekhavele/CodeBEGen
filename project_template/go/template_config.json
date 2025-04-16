@@ -1,0 +1,21 @@
+{
+  "copy_dirs": [
+    "api",
+    "config",
+    "controllers",
+    "middleware",
+    "models",
+    "routes",
+    "utils"
+  ],
+  "copy_files": [
+    "main.go",
+    "go.mod",
+    "go.sum",
+    ".gitignore"
+  ],
+  "post_install": [
+    "go mod tidy",
+    "go mod download"
+  ]
+}

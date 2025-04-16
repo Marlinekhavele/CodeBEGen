@@ -1,0 +1,21 @@
+{
+  "copy_dirs": [
+    "src/controllers",
+    "src/dto",
+    "src/entities",
+    "src/modules",
+    "src/providers",
+    "src/services"
+  ],
+  "copy_files": [
+    "src/app.module.ts",
+    "src/main.ts",
+    "package.json",
+    "tsconfig.json",
+    "nest-cli.json",
+    ".gitignore"
+  ],
+  "post_install": [
+    "npm install"
+  ]
+}

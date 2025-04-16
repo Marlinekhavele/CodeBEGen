@@ -1,0 +1,21 @@
+{
+  "copy_dirs": [
+    "app/Http/Controllers",
+    "app/Http/Middleware",
+    "app/Http/Requests",
+    "app/Models",
+    "app/Services",
+    "config",
+    "database/migrations",
+    "routes"
+  ],
+  "copy_files": [
+    "composer.json",
+    "artisan",
+    ".gitignore"
+  ],
+  "post_install": [
+    "composer install",
+    "php artisan key:generate"
+  ]
+}

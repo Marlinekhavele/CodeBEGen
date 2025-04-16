@@ -77,7 +77,7 @@ codebegen/
 │   │   │   ├── fastapi/      # FastAPI template generators
 │   │   │   ├── flask/        # Flask template generators
 │   │   │   ├── django/       # Django template generators
-│   │   ├── typescript/       # JavaScript code generators
+│   │   ├── javascript/       # JavaScript code generators
 │   │   │   ├── express/      # Express.js template generators
 │   │   │   ├── nest/         # NestJS template generators
 │   │   ├── java/             # Java code generators

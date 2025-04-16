@@ -11,7 +11,7 @@ def extract_entity_from_code(code: str, language: str = "python") -> Optional[st
 
     Args:
         code: The code to analyze
-        language: The programming language of the code (python, typescript, etc.)
+        language: The programming language of the code (python, javascript, etc.)
 
     Returns:
         The extracted entity name or None if not found
@@ -25,7 +25,7 @@ def extract_entity_from_code(code: str, language: str = "python") -> Optional[st
     try:
         if language == "python":
             return extract_entity_from_python(code)
-        elif language in ["typescript", "js"]:
+        elif language in ["javascript", "js"]:
             return extract_entity_from_javascript(code)
         elif language == "java":
             return extract_entity_from_java(code)

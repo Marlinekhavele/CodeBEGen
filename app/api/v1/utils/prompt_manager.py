@@ -96,7 +96,7 @@ class PromptManager:
 
         # Add JavaScript templates if available
         if has_js_templates:
-            PromptManager._templates["typescript"] = {
+            PromptManager._templates["javascript"] = {
                 "endpoint": PromptTemplate.from_template(
                     escape_template_braces(JS_ENDPOINT_GENERATION_TEMPLATE)
                 ),
@@ -128,7 +128,7 @@ class PromptManager:
 
         Args:
             template_name: The name of the template (endpoint, model, schema, etc.)
-            language: The programming language (python, typescript, etc.)
+            language: The programming language (python, javascript, etc.)
 
         Returns:
             PromptTemplate or None if not found

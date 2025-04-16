@@ -86,7 +86,7 @@ class GenerationResult(BaseModel):
                 },
                 "entity_name": "User",
                 "detected_database_usage": True,
-                "language": "typescript",
+                "language": "javascript",
                 "file_extension": ".js",
             }
         }

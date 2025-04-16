@@ -42,6 +42,15 @@ jobs:
             ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY}}
             ENVIRONMENT=production
             EOL
+            
+            # Database configuration
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PORT=5432
+            DB_USER=${{ secrets.DB_USER }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_NAME=${{ secrets.DB_NAME }}
+            DB_TYPE=${{ secrets.DB_TYPE }}
+            EOL
            
             # Ensure proper permissions for env file
             chmod 600 .env

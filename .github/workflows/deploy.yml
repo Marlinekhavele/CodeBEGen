@@ -41,8 +41,6 @@ jobs:
             SECRET_KEY=${{ secrets.SECRET_KEY }}
             ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY}}
             ENVIRONMENT=production
-            EOL
-            
             # Database configuration
             DB_HOST=${{ secrets.DB_HOST }}
             DB_PORT=5432

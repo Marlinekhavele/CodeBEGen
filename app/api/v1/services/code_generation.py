@@ -10,7 +10,7 @@ from app.api.v1.services.git_service import GitService
 from app.api.v1.services.langchain_service import LangchainService
 from app.api.v1.services.language_templates import LanguageTemplateFactory
 from app.api.v1.services.llm_service import LLMService
-from app.api.v1.services.model_schema_update_service import ModelSchemaManager
+from app.api.v1.services.model_schema_update.model_schema_manager import ModelSchemaManager
 from app.api.v1.services.project_analysis_service import ProjectAnalysisService
 
 logger = logging.getLogger(__name__)

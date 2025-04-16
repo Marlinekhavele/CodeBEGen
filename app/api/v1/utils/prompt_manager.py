@@ -26,6 +26,7 @@ class PromptManager:
             MIGRATION_GENERATION_TEMPLATE,
             MODEL_GENERATION_TEMPLATE,
             SCHEMA_GENERATION_TEMPLATE,
+            PYTHON_MODEL_CHANGES_TEMPLATE,
         )
 
         # Load language-specific templates if available
@@ -36,6 +37,7 @@ class PromptManager:
                 JS_MIGRATION_GENERATION_TEMPLATE,
                 JS_MODEL_GENERATION_TEMPLATE,
                 JS_SCHEMA_GENERATION_TEMPLATE,
+                JS_MODEL_CHANGES_TEMPLATE,
             )
 
             has_js_templates = True
@@ -64,6 +66,9 @@ class PromptManager:
                 "model_code",
                 "schema_code",
                 "latest_migration_id",
+                "prompt_description",  
+                "existing_model_code",  
+                "endpoint_context",
             ]
 
             # Create a pattern to identify valid placeholders
@@ -91,6 +96,9 @@ class PromptManager:
                     MIGRATION_GENERATION_TEMPLATE
                 ),
                 "helpers": PromptTemplate.from_template(HELPER_FUNCTIONS_TEMPLATE),
+                "model_changes": PromptTemplate.from_template(  
+                    escape_template_braces(PYTHON_MODEL_CHANGES_TEMPLATE)
+                ),
             }
         }
 
@@ -111,6 +119,9 @@ class PromptManager:
                 ),
                 "helpers": PromptTemplate.from_template(
                     escape_template_braces(JS_HELPER_FUNCTIONS_TEMPLATE)
+                ),
+                "model_changes": PromptTemplate.from_template(  # Add this line
+                    escape_template_braces(JS_MODEL_CHANGES_TEMPLATE)
                 ),
             }
 

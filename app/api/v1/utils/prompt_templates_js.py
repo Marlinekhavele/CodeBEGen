@@ -1121,3 +1121,56 @@ IMPORTANT:
 6. For list operations, include pagination, sorting, and filtering support.
 7. The response should contain ONLY the code itself.
 """
+AVASCRIPT_MODEL_CHANGES_TEMPLATE = """
+You are an expert JavaScript developer helping to MODIFY an EXISTING database model.
+
+TASK: ANALYZE REQUIRED CHANGES TO AN EXISTING MODEL
+You must identify required changes to an existing JavaScript model (Mongoose or Sequelize) based on the user's request.
+
+Entity Name: {entity_name}
+User Request: {prompt_description}
+
+EXISTING MODEL:
+```{language}
+{existing_model_code}
+```
+
+{endpoint_context}
+
+INSTRUCTIONS:
+1. Carefully examine the existing model above. This model ALREADY EXISTS in the database.
+2. Analyze the user's request to identify what changes are needed.
+3. Consider all types of changes: adding new fields, modifying existing fields, removing fields, or renaming fields.
+
+RESPONSE FORMAT:
+Return a JSON array of change operations, where each operation has these fields:
+- "type": The type of change ("add", "modify", "remove", or "rename")
+- "field_name": The name of the field to change
+- "definition": For "add" and "modify", the field definition (Mongoose schema type or Sequelize column definition)
+- "new_name": For "rename" operations only, the new field name
+
+Example for Mongoose:
+[
+  {"type": "add", "field_name": "status", "definition": "{ type: String, enum: ['processing', 'shipped', 'delivered'], default: 'processing', required: true }"},
+  {"type": "modify", "field_name": "price", "definition": "{ type: Number, required: true }"},
+  {"type": "remove", "field_name": "temporary_field"},
+  {"type": "rename", "field_name": "customer_name", "new_name": "fullName"}
+]
+
+Example for Sequelize:
+[
+  {"type": "add", "field_name": "status", "definition": "{ type: DataTypes.ENUM('processing', 'shipped', 'delivered'), allowNull: false, defaultValue: 'processing' }"},
+  {"type": "modify", "field_name": "price", "definition": "{ type: DataTypes.FLOAT, allowNull: false }"},
+  {"type": "remove", "field_name": "temporary_field"},
+  {"type": "rename", "field_name": "customer_name", "new_name": "fullName"}
+]
+
+If no changes are needed, return an empty array: []
+
+IMPORTANT:
+1. Consider the existing model structure carefully.
+2. Only suggest changes specifically requested or implied by the user.
+3. For renames, include both the old field name and new field name.
+4. For modifications, include the complete field definition.
+5. Do NOT suggest any changes to standard fields like _id, id, createdAt, updatedAt.
+"""

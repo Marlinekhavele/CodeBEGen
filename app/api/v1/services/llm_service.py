@@ -447,7 +447,7 @@ class LLMService:
         try:
             # This function might need to be updated to use Langchain or remain as-is
             # For now, we'll keep the original implementation
-            from app.api.v1.services.model_schema_update_service import (
+            from app.api.v1.services.model_schema_update_template.model_schema_base import (
                 ModelSchemaManager,
             )
 

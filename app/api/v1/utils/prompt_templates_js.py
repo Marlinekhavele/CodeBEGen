@@ -1121,7 +1121,7 @@ IMPORTANT:
 6. For list operations, include pagination, sorting, and filtering support.
 7. The response should contain ONLY the code itself.
 """
-AVASCRIPT_MODEL_CHANGES_TEMPLATE = """
+JAVASCRIPT_MODEL_CHANGES_TEMPLATE = """
 You are an expert JavaScript developer helping to MODIFY an EXISTING database model.
 
 TASK: ANALYZE REQUIRED CHANGES TO AN EXISTING MODEL

@@ -736,7 +736,7 @@ Endpoint Code (Defines expected helper function names/calls):
 {endpoint_code}
 ```
 Model Code (For DB logic):
-```typescript
+```javascript
 {model_code}
 ```
 Schema Code (For data validation):

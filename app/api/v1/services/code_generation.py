@@ -7,9 +7,12 @@ from app.api.v1.schemas.code_generation import (
     GenerationResult,
 )
 from app.api.v1.services.git_service import GitService
+from app.api.v1.services.langchain_service import LangchainService
 from app.api.v1.services.language_templates import LanguageTemplateFactory
 from app.api.v1.services.llm_service import LLMService
-from app.api.v1.services.model_schema_update_service import ModelSchemaManager
+from app.api.v1.services.model_schema_update.model_schema_manager import (
+    ModelSchemaManager,
+)
 from app.api.v1.services.project_analysis_service import ProjectAnalysisService
 
 logger = logging.getLogger(__name__)
@@ -278,7 +281,7 @@ class CodeGenerationService:
             language_template,
             endpoint_component,
             project_id,
-            "temp",  # Temporary entity name, will be replaced
+            "temp",
             prompt,
             method=method,
             endpoint_path=endpoint_path,
@@ -303,7 +306,7 @@ class CodeGenerationService:
         extracted_name = language_template.extract_entity_from_code(
             primary_component.get("generated_code", "")
         )
-        return extracted_name or "User"  # Default to "User" if not found
+        return extracted_name or "User"
 
     def _initialize_result_dictionary(
         self,
@@ -383,7 +386,7 @@ class CodeGenerationService:
             # Model was updated
             await self._notify_info(f"Updated existing model {entity_name}")
             await self._process_model_updates(
-                result, update_result, entity_name, project_id
+                result, update_result, entity_name, project_id, language
             )
         else:
             await self._notify_info(
@@ -391,7 +394,7 @@ class CodeGenerationService:
             )
 
     async def _process_model_updates(
-        self, result, update_result, entity_name, project_id
+        self, result, update_result, entity_name, project_id, language
     ):
         """
         Process model updates and add them to the result dictionary.
@@ -418,20 +421,64 @@ class CodeGenerationService:
             "update_details": update_result.get("field_changes"),
         }
 
-        # Add schema updates if applicable
+        # Add schema update results if applicable
         if update_result.get("schema_updated", False):
+            # Get the schema code from the update result
+            schema_code = update_result.get(
+                "schema_code", "# Updated schema code not available"
+            )
+            schema_results = update_result.get("schema_results", [])
             result["schema"] = {
+                "file_path": update_result.get(
+                    "schema_file",
+                    f"schemas/{entity_name.lower()}{LangchainService.get_file_extension(language)}",
+                ),
+                "generated_code": schema_code,
+                "content_base64": update_result.get(
+                    "schema_content_base64",
+                    LangchainService.encode_content(schema_code),
+                ),
+                "file_hash": update_result.get(
+                    "schema_file_hash",
+                    LangchainService.generate_file_hash(schema_code),
+                ),
                 "exists": True,
                 "updated": True,
                 "entity_name": entity_name,
-                "schema_details": update_result.get("schema_results", []),
+                "schema_details": schema_results,
+            }
+        else:
+            placeholder_schema = f"# No updates needed for the schema of {entity_name}"
+            result["schema"] = {
+                "file_path": f"schemas/{entity_name.lower()}{LangchainService.get_file_extension(language)}",
+                "generated_code": placeholder_schema,
+                "content_base64": LangchainService.encode_content(placeholder_schema),
+                "file_hash": LangchainService.generate_file_hash(placeholder_schema),
+                "exists": True,
+                "updated": False,
+                "entity_name": entity_name,
             }
 
-        # Add migration if generated
+        # Add migration if it was generated during the update
         if update_result.get("migration"):
             result["migration"] = update_result.get("migration")
 
-        # Commit updated files
+            if (
+                "file_hash" not in result["migration"]
+                and "generated_code" in result["migration"]
+            ):
+                result["migration"]["file_hash"] = LangchainService.generate_file_hash(
+                    result["migration"]["generated_code"]
+                )
+            if (
+                "content_base64" not in result["migration"]
+                and "generated_code" in result["migration"]
+            ):
+                result["migration"]["content_base64"] = LangchainService.encode_content(
+                    result["migration"]["generated_code"]
+                )
+
+        # Process files to commit from the update
         if update_result.get("files_to_commit"):
             await self._commit_updated_files(
                 project_id, update_result.get("files_to_commit")

@@ -495,3 +495,49 @@ IMPORTANT:
 4. Include at least 3-5 useful helper functions that would be valuable for this entity.
 5. The response should contain ONLY the code itself.
 """
+PYTHON_MODEL_CHANGES_TEMPLATE = """
+You are an expert SQLAlchemy developer helping to MODIFY an EXISTING database model.
+
+TASK: ANALYZE REQUIRED CHANGES TO AN EXISTING MODEL
+You must identify required changes to an existing SQLAlchemy model based on the user's request.
+
+Entity Name: {entity_name}
+User Request: {prompt_description}
+
+EXISTING MODEL:
+```{language}
+{existing_model_code}
+```
+
+{endpoint_context}
+
+INSTRUCTIONS:
+1. Carefully examine the existing model above. This model ALREADY EXISTS in the database.
+2. Analyze the user's request to identify what changes are needed.
+3. Consider all types of changes: adding new fields, modifying existing fields, removing fields, or renaming fields.
+
+RESPONSE FORMAT:
+Return a JSON array of change operations, where each operation has these fields:
+- "type": The type of change ("add", "modify", "remove", or "rename")
+- "field_name": The name of the field to change
+- "definition": For "add" and "modify", the SQLAlchemy Column definition
+- "new_name": For "rename" operations only, the new field name
+
+Example:
+[
+  {"type": "add", "field_name": "status", "definition": "Column(Enum(OrderStatus), nullable=False, default=OrderStatus.PROCESSING)"},
+  {"type": "modify", "field_name": "price", "definition": "Column(Float, nullable=False)"},
+  {"type": "remove", "field_name": "temporary_field"},
+  {"type": "rename", "field_name": "customer_name", "new_name": "full_name"}
+]
+
+If no changes are needed, return an empty array: []
+
+IMPORTANT:
+1. Consider the existing model structure carefully.
+2. Only suggest changes specifically requested or implied by the user.
+3. For renames, include both the old field name and new field name.
+4. For modifications, include the complete new Column definition.
+5. If adding an Enum type, use the existing Enum if one exists in the model, otherwise specify it properly in the Column definition.
+6. Do NOT suggest any changes to standard fields like id, created_at, updated_at.
+"""

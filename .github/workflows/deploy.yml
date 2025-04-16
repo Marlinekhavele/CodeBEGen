@@ -52,6 +52,9 @@ jobs:
            
             # Ensure proper permissions for env file
             chmod 600 .env
+            # Run Alembic migrations
+            echo "Running Alembic migrations..."
+            alembic upgrade head
            
             # Restart the FastAPI service using systemd
             echo "Restarting FastAPI service..."

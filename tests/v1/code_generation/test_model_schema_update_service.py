@@ -5,7 +5,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.api.v1.services.model_schema_update.model_schema_manager import ModelSchemaManager
+from app.api.v1.services.model_schema_update.model_schema_manager import (
+    ModelSchemaManager,
+)
 from app.api.v1.utils.prompt_manager import PromptManager
 
 
@@ -65,9 +67,7 @@ class TestModelSchemaManager:
             "_clean_json_response",
             return_value=json.dumps(MOCK_CHANGES),
         ), patch.object(
-            PromptManager,
-            "format_template",
-            return_value="mock_formatted_template"
+            PromptManager, "format_template", return_value="mock_formatted_template"
         ):
 
             prompt = (
@@ -99,9 +99,7 @@ class TestModelSchemaManager:
         ), patch.object(
             ModelSchemaManager, "_clean_json_response", return_value="[]"
         ), patch.object(
-            PromptManager,
-            "format_template",
-            return_value="mock_formatted_template"
+            PromptManager, "format_template", return_value="mock_formatted_template"
         ):
 
             prompt = ""
@@ -193,9 +191,7 @@ class TestModelSchemaManager:
             "_clean_json_response",
             return_value=json.dumps(MOCK_CHANGES),
         ), patch.object(
-            PromptManager,
-            "format_template",
-            return_value="mock_formatted_template"
+            PromptManager, "format_template", return_value="mock_formatted_template"
         ):
 
             import asyncio

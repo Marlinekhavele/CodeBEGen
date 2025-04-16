@@ -1,13 +1,15 @@
-import logging
-import json
-import re
 import difflib
+import json
+import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.api.v1.services.model_schema_update.model_schema_base import ModelSchemaManagerFactory
-from app.api.v1.services.language_templates import LanguageTemplateFactory
 from app.api.v1.services.langchain_service import LangchainService
+from app.api.v1.services.language_templates import LanguageTemplateFactory
+from app.api.v1.services.model_schema_update.model_schema_base import (
+    ModelSchemaManagerFactory,
+)
 from app.api.v1.services.project_analysis_service import ProjectAnalysisService
 from app.api.v1.utils.prompt_manager import PromptManager
 
@@ -47,29 +49,29 @@ class ModelSchemaManager:
         try:
             # Get the language template for proper path resolution
             language_template = LanguageTemplateFactory.get_template(language)
-            
+
             # Analyze the project with the specified language
             project_analysis = await ProjectAnalysisService.analyze_project(
                 project_id, language=language
             )
-            
+
             # Find the model in the project
             model_info = ModelSchemaManager._find_matching_model(
                 project_analysis, entity_name, language
             )
-            
+
             if not model_info:
                 raise ValueError(f"Model {entity_name} not found in project")
-                
+
             # Get the model file path using the language template
             model_file, model_path = ModelSchemaManager._get_model_file_path(
                 project_id, entity_name, model_info, language_template, language
             )
-            
+
             # Read the current model content
             with open(model_path, "r") as f:
                 existing_model_code = f.read()
-                
+
             # Extract required changes using LLM
             field_changes = await ModelSchemaManager.analyze_required_changes(
                 prompt_description=prompt_description,
@@ -78,36 +80,40 @@ class ModelSchemaManager:
                 existing_model_code=existing_model_code,
                 language=language,
             )
-            
+
             if not field_changes:
                 logger.info(f"No changes required for {entity_name} model")
                 return {
                     "model_updated": False,
                     "model_file": model_file,
                     "message": "No changes needed",
-                    "file_hash": LangchainService.generate_file_hash(existing_model_code),
+                    "file_hash": LangchainService.generate_file_hash(
+                        existing_model_code
+                    ),
                 }
-                
+
             # Get the appropriate model updater
             model_updater = ModelSchemaManagerFactory.get_model_updater(language)
-            
+
             # Update the model
             updated_content, change_summary = model_updater.update_model(
                 model_path, entity_name, field_changes, existing_model_code
             )
-            
+
             # Update the model file
             ModelSchemaManager._update_model_file(model_path, updated_content)
-            
+
             # Prepare files to commit
             files_to_commit = []
             if change_summary.get("changes_made", False):
-                files_to_commit.append({
-                    "file_path": model_file,
-                    "commit_message": f"feat: Update {entity_name} model with {len(change_summary.get('added_fields', []))} new fields",
-                    "content": updated_content,
-                })
-                
+                files_to_commit.append(
+                    {
+                        "file_path": model_file,
+                        "commit_message": f"feat: Update {entity_name} model with {len(change_summary.get('added_fields', []))} new fields",
+                        "content": updated_content,
+                    }
+                )
+
             # Generate migration if requested and language supports it
             migration_result = None
             if generate_migration and change_summary.get("changes_made", False):
@@ -116,36 +122,50 @@ class ModelSchemaManager:
                     migration_result = await ModelSchemaManager._generate_migration(
                         project_id, entity_name, language, updated_content
                     )
-                    
+
                     # Add migration to commit list if generated
                     if migration_result and "generated_code" in migration_result:
-                        files_to_commit.append({
-                            "file_path": migration_result.get("file_path"),
-                            "commit_message": f"feat: Add migration for {entity_name} model changes",
-                            "content": migration_result.get("generated_code"),
-                        })
-            
+                        files_to_commit.append(
+                            {
+                                "file_path": migration_result.get("file_path"),
+                                "commit_message": f"feat: Add migration for {entity_name} model changes",
+                                "content": migration_result.get("generated_code"),
+                            }
+                        )
+
             # Update schemas
             schema_results = await ModelSchemaManager._update_schemas(
-                project_id, entity_name, field_changes, updated_content, 
-                endpoint_code, language, language_template
+                project_id,
+                entity_name,
+                field_changes,
+                updated_content,
+                endpoint_code,
+                language,
+                language_template,
             )
-            
+
             # Add schema files to commit list if updated
             if schema_results.get("schema_updated", False):
                 for schema_result in schema_results.get("schema_results", []):
-                    if schema_result.get("updated", False) and schema_result.get("content"):
+                    if schema_result.get("updated", False) and schema_result.get(
+                        "content"
+                    ):
                         schema_file_path = ModelSchemaManager._get_schema_file_path(
-                            project_id, entity_name, schema_result.get("schema_file", ""),
-                            language, language_template
+                            project_id,
+                            entity_name,
+                            schema_result.get("schema_file", ""),
+                            language,
+                            language_template,
                         )
-                        
-                        files_to_commit.append({
-                            "file_path": schema_file_path,
-                            "commit_message": f"feat: Update {entity_name} schemas with new fields",
-                            "content": schema_result.get("content"),
-                        })
-            
+
+                        files_to_commit.append(
+                            {
+                                "file_path": schema_file_path,
+                                "commit_message": f"feat: Update {entity_name} schemas with new fields",
+                                "content": schema_result.get("content"),
+                            }
+                        )
+
             # Return the results
             return {
                 "model_updated": change_summary.get("changes_made", False),
@@ -158,23 +178,23 @@ class ModelSchemaManager:
                 "schema_results": schema_results.get("schema_results", []),
                 "files_to_commit": files_to_commit,
             }
-            
+
         except Exception as e:
             logger.error(f"Error processing model changes: {str(e)}", exc_info=True)
             return {"model_updated": False, "error": str(e)}
-    
+
     @staticmethod
     def _update_model_file(model_path: Path, updated_content: str) -> None:
         """
         Update a model file with new content.
-        
+
         Args:
             model_path (Path): Path to the model file
             updated_content (str): New content to write to the file
         """
         with open(model_path, "w") as f:
             f.write(updated_content)
-    
+
     @staticmethod
     def _find_matching_model(
         project_analysis: Dict[str, Any], entity_name: str, language: str
@@ -202,15 +222,20 @@ class ModelSchemaManager:
             if model_name in entity_variations or any(
                 var == model_name for var in entity_variations
             ):
-                logger.info(f"Found matching model: {model_name} for entity: {entity_name}")
+                logger.info(
+                    f"Found matching model: {model_name} for entity: {entity_name}"
+                )
                 return model
 
         return None
-        
+
     @staticmethod
     def _get_model_file_path(
-        project_id: str, entity_name: str, model_info: Dict[str, Any], 
-        language_template: Any, language: str
+        project_id: str,
+        entity_name: str,
+        model_info: Dict[str, Any],
+        language_template: Any,
+        language: str,
     ) -> Tuple[str, Path]:
         """
         Get the file path for a model.
@@ -229,11 +254,11 @@ class ModelSchemaManager:
         component_map = language_template.get_component_map()
         model_component = component_map.get("model")
         component_paths = language_template.get_component_paths(project_id, entity_name)
-        
+
         # Try language-specific path first
         model_file = component_paths[model_component]
         model_path = Path(f"repos/{project_id}/{model_file}")
-        
+
         # If path doesn't exist but we have model info with a file, try that
         if not model_path.exists() and model_info and "file" in model_info:
             language_prefix = ""
@@ -241,22 +266,25 @@ class ModelSchemaManager:
                 language_prefix = "python/"
             elif language.lower() in ["javascript", "js"]:
                 language_prefix = "javascript/"
-                
+
             # Try with language prefix
             model_file = f"{language_prefix}models/{model_info.get('file')}"
             model_path = Path(f"repos/{project_id}/{model_file}")
-            
+
             # If still doesn't exist, try without language prefix
             if not model_path.exists():
                 model_file = f"models/{model_info.get('file')}"
                 model_path = Path(f"repos/{project_id}/{model_file}")
-        
+
         return model_file, model_path
-        
+
     @staticmethod
     def _get_schema_file_path(
-        project_id: str, entity_name: str, schema_file: str, 
-        language: str, language_template: Any
+        project_id: str,
+        entity_name: str,
+        schema_file: str,
+        language: str,
+        language_template: Any,
     ) -> str:
         """
         Get the file path for a schema.
@@ -274,36 +302,36 @@ class ModelSchemaManager:
         # Get component path from language template
         component_map = language_template.get_component_map()
         schema_component = component_map.get("schema")
-        
+
         if not schema_component:
             # This language doesn't use separate schema files
             return schema_file
-        
+
         # Try language-specific path
         component_paths = language_template.get_component_paths(project_id, entity_name)
         schema_file_path = component_paths[schema_component]
-        
+
         # Check if the path exists
         schema_path = Path(f"repos/{project_id}/{schema_file_path}")
         if schema_path.exists():
             return schema_file_path
-        
+
         # Try with language prefix
         language_prefix = ""
         if language.lower() == "python":
             language_prefix = "python/"
         elif language.lower() in ["javascript", "js"]:
             language_prefix = "javascript/"
-            
+
         schema_file_path = f"{language_prefix}schemas/{schema_file}"
         schema_path = Path(f"repos/{project_id}/{schema_file_path}")
-        
+
         # If still doesn't exist, try without language prefix
         if not schema_path.exists():
             schema_file_path = f"schemas/{schema_file}"
-        
+
         return schema_file_path
-        
+
     @staticmethod
     async def _generate_migration(
         project_id: str, entity_name: str, language: str, model_code: str
@@ -331,11 +359,16 @@ class ModelSchemaManager:
         except Exception as e:
             logger.error(f"Error generating migration: {str(e)}", exc_info=True)
             return None
-            
+
     @staticmethod
     async def _update_schemas(
-        project_id: str, entity_name: str, field_changes: List[Dict[str, Any]],
-        model_code: str, endpoint_code: Optional[str], language: str, language_template: Any
+        project_id: str,
+        entity_name: str,
+        field_changes: List[Dict[str, Any]],
+        model_code: str,
+        endpoint_code: Optional[str],
+        language: str,
+        language_template: Any,
     ) -> Dict[str, Any]:
         """
         Update schemas related to a model.
@@ -356,104 +389,121 @@ class ModelSchemaManager:
             # Check if this language supports schemas
             component_map = language_template.get_component_map()
             schema_component = component_map.get("schema")
-            
+
             if not schema_component:
                 logger.info(f"Language {language} does not use separate schema files")
-                return {"schema_updated": False, "reason": "Language does not use schemas"}
-                
+                return {
+                    "schema_updated": False,
+                    "reason": "Language does not use schemas",
+                }
+
             # Analyze the project
             project_analysis = await ProjectAnalysisService.analyze_project(
                 project_id, language=language
             )
-            
+
             # Find schemas related to the entity
             schema_files, schema_types = ModelSchemaManager._find_related_schemas(
                 project_analysis, entity_name, language
             )
-            
+
             if not schema_files:
                 logger.warning(f"No schemas found for {entity_name}")
                 return {"schema_updated": False, "reason": "No schemas found"}
-            
+
             # Process each schema file
             results = []
             schema_updated = False
-            
+
             for i, schema_file in enumerate(schema_files):
                 schema_type = schema_types.get(schema_file, None)
                 schema_path = ModelSchemaManager._get_schema_file_path_object(
                     project_id, entity_name, schema_file, language, language_template
                 )
-                
+
                 # Skip if file doesn't exist
                 if not schema_path or not schema_path.exists():
-                    results.append({
-                        "schema_file": schema_file,
-                        "updated": False,
-                        "reason": "File not found",
-                    })
+                    results.append(
+                        {
+                            "schema_file": schema_file,
+                            "updated": False,
+                            "reason": "File not found",
+                        }
+                    )
                     continue
-                    
+
                 # Read the schema content
                 with open(schema_path, "r") as f:
                     schema_content = f.read()
-                    
+
                 # Get the appropriate schema updater
-                schema_updater = ModelSchemaManagerFactory.get_schema_updater(language, schema_type)
-                
+                schema_updater = ModelSchemaManagerFactory.get_schema_updater(
+                    language, schema_type
+                )
+
                 # Convert model changes to schema changes
-                schema_changes = schema_updater.convert_model_changes_to_schema_changes(field_changes)
-                
+                schema_changes = schema_updater.convert_model_changes_to_schema_changes(
+                    field_changes
+                )
+
                 # Find schemas in the content
                 schemas = schema_updater.find_schemas(schema_content, entity_name)
-                
+
                 if not schemas:
-                    results.append({
-                        "schema_file": schema_file,
-                        "updated": False,
-                        "reason": "No relevant schemas found",
-                    })
+                    results.append(
+                        {
+                            "schema_file": schema_file,
+                            "updated": False,
+                            "reason": "No relevant schemas found",
+                        }
+                    )
                     continue
-                     
+
                 # Update each schema
                 updated_content = schema_content
                 updated = False
-                
+
                 for schema_info in schemas:
                     result = schema_updater.update_schema(
                         updated_content, schema_info, schema_changes
                     )
-                    
+
                     if result["updated"]:
                         updated_content = result["content"]
                         updated = True
-                
+
                 # Only write back if changes were made
                 if updated:
                     with open(schema_path, "w") as f:
                         f.write(updated_content)
-                        
+
                     schema_updated = True
-                    results.append({
-                        "schema_file": schema_file,
-                        "updated": True,
-                        "content": updated_content,
-                        "diff": ModelSchemaManager._generate_diff(schema_content, updated_content),
-                        "schema_count": len(schemas),
-                    })
+                    results.append(
+                        {
+                            "schema_file": schema_file,
+                            "updated": True,
+                            "content": updated_content,
+                            "diff": ModelSchemaManager._generate_diff(
+                                schema_content, updated_content
+                            ),
+                            "schema_count": len(schemas),
+                        }
+                    )
                 else:
-                    results.append({
-                        "schema_file": schema_file,
-                        "updated": False,
-                        "reason": "No changes needed",
-                    })
-            
+                    results.append(
+                        {
+                            "schema_file": schema_file,
+                            "updated": False,
+                            "reason": "No changes needed",
+                        }
+                    )
+
             return {"schema_updated": schema_updated, "schema_results": results}
-            
+
         except Exception as e:
             logger.error(f"Error updating schemas: {str(e)}", exc_info=True)
             return {"schema_updated": False, "error": str(e)}
-            
+
     @staticmethod
     def _find_related_schemas(
         project_analysis: Dict[str, Any], entity_name: str, language: str
@@ -471,23 +521,26 @@ class ModelSchemaManager:
         """
         schema_files = []
         schema_types = {}  # Map file to schema type
-        
+
         # Look in schemas
         for schema in project_analysis.get("schemas", []):
             schema_name = schema.get("name", "")
             schema_file = schema.get("file", "")
             schema_type = schema.get("type", "unknown")
-            
+
             # Match schemas that might be related to our entity
             if entity_name.lower() in schema_name.lower():
                 schema_files.append(schema_file)
                 schema_types[schema_file] = schema_type
-        
+
         # For JavaScript, also look in utils for validation files
         if language.lower() in ["javascript", "js"]:
             for helper in project_analysis.get("helpers", []):
                 helper_file = helper.get("file", "")
-                if "validation" in helper_file.lower() or entity_name.lower() in helper_file.lower():
+                if (
+                    "validation" in helper_file.lower()
+                    or entity_name.lower() in helper_file.lower()
+                ):
                     schema_files.append(helper_file)
                     # Try to determine type from file name
                     if "joi" in helper_file.lower():
@@ -496,13 +549,16 @@ class ModelSchemaManager:
                         schema_types[helper_file] = "express-validator"
                     else:
                         schema_types[helper_file] = "unknown"
-        
+
         return schema_files, schema_types
-        
+
     @staticmethod
     def _get_schema_file_path_object(
-        project_id: str, entity_name: str, schema_file: str, 
-        language: str, language_template: Any
+        project_id: str,
+        entity_name: str,
+        schema_file: str,
+        language: str,
+        language_template: Any,
     ) -> Optional[Path]:
         """
         Get a Path object for a schema file.
@@ -521,9 +577,9 @@ class ModelSchemaManager:
         schema_file_path = ModelSchemaManager._get_schema_file_path(
             project_id, entity_name, schema_file, language, language_template
         )
-        
+
         return Path(f"repos/{project_id}/{schema_file_path}")
-        
+
     @staticmethod
     def _generate_diff(original: str, modified: str, context_lines: int = 3) -> str:
         """
@@ -549,7 +605,7 @@ class ModelSchemaManager:
         )
 
         return "".join(diff)
-    
+
     @staticmethod
     async def analyze_required_changes(
         prompt_description: str,
@@ -606,7 +662,9 @@ class ModelSchemaManager:
 
             try:
                 changes = json.loads(changes_text)
-                logger.info(f"Parsed {len(changes)} change operations for {entity_name}")
+                logger.info(
+                    f"Parsed {len(changes)} change operations for {entity_name}"
+                )
 
                 # Validate the changes
                 validated_changes = []
@@ -655,7 +713,7 @@ class ModelSchemaManager:
         except Exception as e:
             logger.error(f"Error analyzing model changes: {str(e)}", exc_info=True)
             return []
-            
+
     @staticmethod
     def _get_standard_fields(language: str) -> List[str]:
         """
@@ -673,7 +731,7 @@ class ModelSchemaManager:
             return ["_id", "id", "createdat", "updatedat", "created_at", "updated_at"]
         else:
             return ["id", "created_at", "updated_at"]
-            
+
     @staticmethod
     def _clean_json_response(response: str) -> str:
         """
@@ -719,15 +777,3 @@ class ModelSchemaManager:
             return "[]"
 
         return response.strip()
-
-    @staticmethod
-    def _update_model_file(model_path: Path, updated_content: str) -> None:
-        """
-        Update a model file with new content.
-        
-        Args:
-            model_path (Path): Path to the model file
-            updated_content (str): New content to write to the file
-        """
-        with open(model_path, "w") as f:
-            f.write(updated_content)

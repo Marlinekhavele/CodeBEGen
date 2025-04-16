@@ -100,32 +100,78 @@ class PythonTemplate(LanguageTemplate):
         Returns:
             Optional[str]: Extracted entity name or None if no entity could be identified
         """
-        # Pattern for model imports
-        model_import = re.search(r"from\s+.*models?\s+import\s+(\w+)", code)
-        if model_import:
-            return model_import.group(1)
-
-        # Pattern for db queries
-        db_query = re.search(r"db\.query\((\w+)\)", code)
-        if db_query:
-            return db_query.group(1)
-
-        # Pattern for schema usage
-        schema_usage = re.search(r"(\w+)Schema\(", code)
-        if schema_usage:
-            return schema_usage.group(1)
-
-        # Pattern for model instantiation
-        model_inst = re.search(r"(\w+)\s*=\s*\w+Model\(", code)
-        if model_inst:
-            return model_inst.group(1)
-
-        # Pattern for model class definition
-        model_class = re.search(r"class\s+(\w+)\s*\(\s*Base\s*\)", code)
-        if model_class:
-            return model_class.group(1)
-
-        return None
+        if not code or not isinstance(code, str):
+            return None
+        try:
+            # Pattern for model imports (absolute imports)
+            model_import = re.search(r"from\s+.*models?\s+import\s+(\w+)", code)
+            if model_import:
+                return model_import.group(1)
+            # Pattern for model imports (relative/specific imports)
+            model_import_specific = re.search(r"from\s+models\.(\w+)\s+import\s+(\w+)", code)
+            if model_import_specific:
+                return model_import_specific.group(2)
+            # Pattern for db queries
+            db_query = re.search(r"db\.query\((\w+)\)", code)
+            if db_query:
+                return db_query.group(1)
+            # Pattern for schema imports (specific path)
+            schema_import = re.search(r"from\s+schemas\.(\w+)\s+import\s+(\w+)Schema", code)
+            if schema_import:
+                return schema_import.group(2)
+            # Pattern for schema usage
+            schema_usage = re.search(r"(\w+)Schema\(", code)
+            if schema_usage:
+                return schema_usage.group(1)
+            # Pattern for model instantiation
+            model_inst = re.search(r"(\w+)\s*=\s*\w+Model\(", code)
+            if model_inst:
+                return model_inst.group(1)
+            # Pattern for model class definition
+            model_class = re.search(r"class\s+(\w+)\s*\(\s*Base\s*\)", code)
+            if model_class:
+                return model_class.group(1)
+            # Look for helper function imports that might contain entity names
+            helper_import = re.search(r"from\s+helpers\.(\w+)_helpers\s+import", code)
+            if helper_import:
+                # Convert snake_case to PascalCase if needed
+                entity = helper_import.group(1)
+                return "".join(word.capitalize() for word in entity.split("_"))
+            # Look for route paths that might indicate the entity
+            route_path = re.search(r'@router\.\w+\([\'"]/?(\w+)[\'"]', code)
+            if route_path:
+                # Convert plural to singular if needed
+                entity = route_path.group(1)
+                if entity.endswith("s"):
+                    entity = entity[:-1]
+                return entity.capitalize()
+            # Look for common CRUD operation functions
+            crud_function = re.search(r"def\s+(?:get|create|update|delete|find)_?(\w+)", code)
+            if crud_function:
+                entity = crud_function.group(1)
+                if entity.endswith("s"):
+                    entity = entity[:-1]
+                return entity.capitalize()
+            # Look for FastAPI path operations
+            fastapi_path = re.search(r"@app\.\w+\([\'\"]/(\w+)", code)
+            if fastapi_path:
+                entity = fastapi_path.group(1)
+                if entity.endswith("s"):
+                    entity = entity[:-1]
+                return entity.capitalize()
+            # Look for SQLAlchemy table definitions
+            sqlalchemy_table = re.search(r"Table\([\'\"]\w*(\w+)s?[\'\"]\s*,", code)
+            if sqlalchemy_table:
+                entity = sqlalchemy_table.group(1)
+                return entity.capitalize()
+            # Last resort: look for patterns in function parameters
+            function_params = re.search(r"def\s+\w+\([^)]*?(\w+)_id", code)
+            if function_params:
+                return function_params.group(1).capitalize()
+            return None
+        except Exception as e:
+            # Log the exception but don't crash
+            return None
 
     async def generate_component(
         self,

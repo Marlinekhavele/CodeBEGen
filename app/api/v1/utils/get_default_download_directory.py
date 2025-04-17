@@ -15,7 +15,9 @@ def get_default_download_directory() -> Path:
     if system == "Linux":
 
         # Linux: Use XDG_DOWNLOAD_DIR if defined, otherwise fallback to ~/Downloads
-        xdg_config_home = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+        xdg_config_home = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser(
+            "~/.config"
+        )
         user_dirs_file = Path(xdg_config_home) / "user-dirs.dirs"
 
         if user_dirs_file.exists():
@@ -23,8 +25,12 @@ def get_default_download_directory() -> Path:
                 for line in f:
                     if line.startswith("XDG_DOWNLOAD_DIR="):
                         # Extract the path from the line (remove quotes and expand ~)
-                        download_dir = line.split("=")[1].strip().strip('"').replace("$HOME",
-                                                                                     os.path.expanduser("~"))
+                        download_dir = (
+                            line.split("=")[1]
+                            .strip()
+                            .strip('"')
+                            .replace("$HOME", os.path.expanduser("~"))
+                        )
                         return Path(download_dir)
 
         # Fallback to ~/Downloads

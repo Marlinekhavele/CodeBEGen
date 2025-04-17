@@ -1,6 +1,14 @@
-import hashlib, logging, os, random, shutil, string, tempfile, zipfile, httpx
+import hashlib
+import logging
+import os
+import random
+import shutil
+import string
+import tempfile
+import zipfile
 from pathlib import Path
 
+import httpx
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -8,14 +16,17 @@ from app.api.db.database import get_db
 from app.api.v1.models.endpoints import EndPoint
 from app.api.v1.models.projects import Project
 from app.api.v1.schemas.projects import ProjectInitRequest, ProjectInitResponse
-from app.api.v1.utils.get_default_download_directory import get_default_download_directory
+from app.api.v1.utils.get_default_download_directory import (
+    get_default_download_directory,
+)
 from app.api.v1.utils.git_operations import (
+    REPOS_DIR,
     clone_template_repo,
     configure_git_for_project,
     create_project_directory,
     ensure_repos_directory,
     push_to_remote,
-    update_git_remote, REPOS_DIR,
+    update_git_remote,
 )
 from app.api.v1.utils.git_utils import create_gitea_repo
 from config import BASE_DIR, settings
@@ -226,10 +237,10 @@ class ProjectInitService:
 
     @staticmethod
     async def download_project_gitea_repo(
-            project_name: str,
-            output_path: Path = None,
-            use_default_download_dir: bool = False,
-            save_as_zip: bool = True
+        project_name: str,
+        output_path: Path = None,
+        use_default_download_dir: bool = False,
+        save_as_zip: bool = True,
     ) -> Path:
         """
         Downloads a project from Gitea and saves it as a ZIP file.
@@ -260,9 +271,11 @@ class ProjectInitService:
             # Determine destination directory and filename
             if output_path:
                 # Use provided output path
-                if save_as_zip and output_path.suffix != '.zip':
+                if save_as_zip and output_path.suffix != ".zip":
                     # If saving as ZIP but path doesn't end with .zip, append filename
-                    dest_dir = output_path if output_path.is_dir() else output_path.parent
+                    dest_dir = (
+                        output_path if output_path.is_dir() else output_path.parent
+                    )
                     dest_file = dest_dir / f"{project_name}.zip"
                 else:
                     # Use provided path as is
@@ -296,18 +309,22 @@ class ProjectInitService:
                 if response.status_code != 200:
                     error_msg = f"Failed to download repository: {response.status_code} - {response.text}"
                     logger.error(error_msg)
-                    raise HTTPException(status_code=response.status_code, detail=error_msg)
+                    raise HTTPException(
+                        status_code=response.status_code, detail=error_msg
+                    )
 
                 if save_as_zip:
                     # Save directly as ZIP file
-                    with open(dest_file, 'wb') as f:
+                    with open(dest_file, "wb") as f:
                         f.write(response.content)
                     logger.info(f"Successfully saved ZIP file to {dest_file}")
                     return dest_file
                 else:
                     # Extract the ZIP content to a directory
                     # Create a temporary file first
-                    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_file:
+                    with tempfile.NamedTemporaryFile(
+                        suffix=".zip", delete=False
+                    ) as temp_file:
                         temp_file_path = temp_file.name
                         temp_file.write(response.content)
 
@@ -324,9 +341,13 @@ class ProjectInitService:
                         dest_file.mkdir(parents=True, exist_ok=True)
 
                     # Extract the zip file
-                    with zipfile.ZipFile(temp_file_path, 'r') as zip_ref:
+                    with zipfile.ZipFile(temp_file_path, "r") as zip_ref:
                         # Get the root directory in the zip (usually {project_name}-main/)
-                        root_dirs = {item.split('/')[0] for item in zip_ref.namelist() if '/' in item}
+                        root_dirs = {
+                            item.split("/")[0]
+                            for item in zip_ref.namelist()
+                            if "/" in item
+                        }
                         root_dir = root_dirs.pop() if root_dirs else ""
 
                         # Extract all files

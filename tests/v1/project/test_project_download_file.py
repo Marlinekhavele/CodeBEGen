@@ -1,15 +1,16 @@
-import app
-import unittest
 import os
-import tempfile
 import shutil
+import tempfile
+import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import httpx
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+import app
 from app.api.v1.services.projects import ProjectInitService
 
 
@@ -23,14 +24,16 @@ class TestDownloadProjectGiteaRepo(unittest.TestCase):
         self.test_project_name = "test-project"
 
         # Create mock settings
-        self.settings_patcher = patch('app.api.v1.services.projects.settings', autospec=True)
+        self.settings_patcher = patch(
+            "app.api.v1.services.projects.settings", autospec=True
+        )
         self.mock_settings = self.settings_patcher.start()
         self.mock_settings.GITEA_API_URL = "https://git.example.com/api/v1"
         self.mock_settings.GIT_OWNER = "test-owner"
         self.mock_settings.GITEA_TOKEN = "test-token"
 
         # Mock httpx.AsyncClient
-        self.httpx_patcher = patch('httpx.AsyncClient', autospec=True)
+        self.httpx_patcher = patch("httpx.AsyncClient", autospec=True)
         self.mock_httpx = self.httpx_patcher.start()
 
         # Mock response
@@ -45,26 +48,32 @@ class TestDownloadProjectGiteaRepo(unittest.TestCase):
         self.mock_httpx.return_value = self.mock_client
 
         # Mock other functions
-        self.ensure_repos_dir_patcher = patch('app.api.v1.services.projects.ensure_repos_directory',
-                                              autospec=True)
+        self.ensure_repos_dir_patcher = patch(
+            "app.api.v1.services.projects.ensure_repos_directory", autospec=True
+        )
         self.mock_ensure_repos = self.ensure_repos_dir_patcher.start()
 
-        self.get_default_dir_patcher = patch('app.api.v1.services.projects.get_default_download_directory',
-                                             autospec=True)
+        self.get_default_dir_patcher = patch(
+            "app.api.v1.services.projects.get_default_download_directory", autospec=True
+        )
         self.mock_get_default_dir = self.get_default_dir_patcher.start()
         self.mock_get_default_dir.return_value = Path(self.temp_dir) / "downloads"
 
         # Create mock REPOS_DIR
-        self.repos_dir_patcher = patch('app.api.v1.services.projects.REPOS_DIR', Path(self.temp_dir) / "repos")
+        self.repos_dir_patcher = patch(
+            "app.api.v1.services.projects.REPOS_DIR", Path(self.temp_dir) / "repos"
+        )
         self.mock_repos_dir = self.repos_dir_patcher.start()
 
         # Mock zipfile
-        self.zipfile_patcher = patch('zipfile.ZipFile', autospec=True)
+        self.zipfile_patcher = patch("zipfile.ZipFile", autospec=True)
         self.mock_zipfile = self.zipfile_patcher.start()
         self.mock_zip_instance = MagicMock()
         self.mock_zipfile.return_value = self.mock_zip_instance
         self.mock_zip_instance.__enter__.return_value = self.mock_zip_instance
-        self.mock_zip_instance.namelist.return_value = [f"{self.test_project_name}-main/file1.txt"]
+        self.mock_zip_instance.namelist.return_value = [
+            f"{self.test_project_name}-main/file1.txt"
+        ]
 
     def tearDown(self):
         # Clean up temporary directories
@@ -86,21 +95,19 @@ class TestDownloadProjectGiteaRepo(unittest.TestCase):
 
         # Run the test
         result = await ProjectInitService.download_project_gitea_repo(
-            self.test_project_name,
-            self.test_output_path,
-            save_as_zip=True
+            self.test_project_name, self.test_output_path, save_as_zip=True
         )
 
         # Verify the correct URL was used
         expected_url = f"{self.mock_settings.GITEA_API_URL}/repos/{self.mock_settings.GIT_OWNER}/{self.test_project_name}/archive/main.zip"
         self.mock_client.get.assert_called_once_with(
             expected_url,
-            headers={"Authorization": f"token {self.mock_settings.GITEA_TOKEN}"}
+            headers={"Authorization": f"token {self.mock_settings.GITEA_TOKEN}"},
         )
 
         # Verify the file was saved to the correct location
         expected_path = self.test_output_path
-        if expected_path.suffix != '.zip':
+        if expected_path.suffix != ".zip":
             expected_path = expected_path.parent / f"{self.test_project_name}.zip"
         self.assertEqual(result, expected_path)
 
@@ -109,13 +116,13 @@ class TestDownloadProjectGiteaRepo(unittest.TestCase):
         """Test downloading to the downloads folder"""
         # Run the test
         result = await ProjectInitService.download_project_gitea_repo(
-            self.test_project_name,
-            use_default_download_dir=True,
-            save_as_zip=True
+            self.test_project_name, use_default_download_dir=True, save_as_zip=True
         )
 
         # Verify the file was saved to the downloads folder
-        expected_path = self.mock_get_default_dir.return_value / f"{self.test_project_name}.zip"
+        expected_path = (
+            self.mock_get_default_dir.return_value / f"{self.test_project_name}.zip"
+        )
         self.assertEqual(result, expected_path)
 
         # Verify get_default_download_directory was called
@@ -129,9 +136,7 @@ class TestDownloadProjectGiteaRepo(unittest.TestCase):
         """Test downloading to the default repos folder"""
         # Run the test
         result = await ProjectInitService.download_project_gitea_repo(
-            self.test_project_name,
-            use_default_download_dir=False,
-            save_as_zip=True
+            self.test_project_name, use_default_download_dir=False, save_as_zip=True
         )
 
         # Verify the file was saved to the repos folder
@@ -149,8 +154,7 @@ class TestDownloadProjectGiteaRepo(unittest.TestCase):
         """Test downloading and extracting the zip"""
         # Run the test
         result = await ProjectInitService.download_project_gitea_repo(
-            self.test_project_name,
-            save_as_zip=False
+            self.test_project_name, save_as_zip=False
         )
 
         # Verify zipfile was used to extract
@@ -205,26 +209,30 @@ class TestDownloadRepositoryFileEndpoint(unittest.TestCase):
 
         # Mock the download_project_gitea_repo method
         self.download_patcher = patch.object(
-            ProjectInitService, 'download_project_gitea_repo', autospec=True
+            ProjectInitService, "download_project_gitea_repo", autospec=True
         )
         self.mock_download = self.download_patcher.start()
         self.mock_download.return_value = self.temp_file_path
 
         # Mock FileResponse
-        self.file_response_patcher = patch('fastapi.responses.FileResponse', autospec=True)
+        self.file_response_patcher = patch(
+            "fastapi.responses.FileResponse", autospec=True
+        )
         self.mock_file_response = self.file_response_patcher.start()
         self.mock_response = MagicMock()
         self.mock_file_response.return_value = self.mock_response
 
         # Mock tempfile.NamedTemporaryFile
-        self.named_temp_file_patcher = patch('tempfile.NamedTemporaryFile', autospec=True)
+        self.named_temp_file_patcher = patch(
+            "tempfile.NamedTemporaryFile", autospec=True
+        )
         self.mock_named_temp_file = self.named_temp_file_patcher.start()
         self.mock_temp_file = MagicMock()
         self.mock_temp_file.name = str(self.temp_file_path)
         self.mock_named_temp_file.return_value = self.mock_temp_file
 
         # Create the file for testing
-        with open(self.temp_file_path, 'wb') as f:
+        with open(self.temp_file_path, "wb") as f:
             f.write(b"test content")
 
     def tearDown(self):
@@ -246,17 +254,19 @@ class TestDownloadRepositoryFileEndpoint(unittest.TestCase):
         self.mock_download.assert_called_once()
         args, kwargs = self.mock_download.call_args
         self.assertEqual(args[0], project_name)  # First argument should be project_name
-        self.assertEqual(kwargs.get('save_as_zip', True), True)  # save_as_zip should be True
+        self.assertEqual(
+            kwargs.get("save_as_zip", True), True
+        )  # save_as_zip should be True
 
         # Verify FileResponse was created correctly
         self.mock_file_response.assert_called_once()
         args, kwargs = self.mock_file_response.call_args
-        self.assertEqual(kwargs['path'], self.temp_file_path)
-        self.assertEqual(kwargs['filename'], f"{project_name}.zip")
-        self.assertEqual(kwargs['media_type'], "application/zip")
+        self.assertEqual(kwargs["path"], self.temp_file_path)
+        self.assertEqual(kwargs["filename"], f"{project_name}.zip")
+        self.assertEqual(kwargs["media_type"], "application/zip")
 
         # Verify background task was set
-        self.assertTrue(hasattr(self.mock_response, 'background'))
+        self.assertTrue(hasattr(self.mock_response, "background"))
 
     @pytest.mark.asyncio
     async def test_download_with_custom_filename(self):
@@ -266,7 +276,7 @@ class TestDownloadRepositoryFileEndpoint(unittest.TestCase):
         # Verify FileResponse used the custom filename
         self.mock_file_response.assert_called_once()
         args, kwargs = self.mock_file_response.call_args
-        self.assertEqual(kwargs['filename'], custom_filename)
+        self.assertEqual(kwargs["filename"], custom_filename)
 
     @pytest.mark.asyncio
     async def test_download_error_handling(self):

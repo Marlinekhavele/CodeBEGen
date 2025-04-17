@@ -3,10 +3,10 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, status, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
-from fastapi.responses import FileResponse, JSONResponse
 
 from app.api.db.database import get_db
 from app.api.v1.schemas.projects import ProjectInitRequest, ProjectInitSuccessResponse
@@ -61,11 +61,12 @@ async def initialize_project(
         )
 
 
-
 @router.get("/export/")
 async def download_repository_file(
-        project_name: str = Query(..., description="Repository name to download"),
-        output_filename: Optional[str] = Query(None, description="Custom filename for download")
+    project_name: str = Query(..., description="Repository name to download"),
+    output_filename: Optional[str] = Query(
+        None, description="Custom filename for download"
+    ),
 ):
     """
     Downloads a repository from Gitea and returns it as a file download response.
@@ -87,8 +88,7 @@ async def download_repository_file(
         try:
             # Download the repository directly to the temporary file
             await ProjectInitService.download_project_gitea_repo(
-                project_name,
-                temp_path
+                project_name, temp_path
             )
 
             # Determine the filename for the download
@@ -96,9 +96,7 @@ async def download_repository_file(
 
             # Return a FileResponse which will trigger the browser's file download
             response = FileResponse(
-                path=temp_path,
-                filename=filename,
-                media_type="application/zip"
+                path=temp_path, filename=filename, media_type="application/zip"
             )
 
             # Set up a background task to delete the file after the response is sent
@@ -129,5 +127,5 @@ async def download_repository_file(
         return error_response(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             message="Failed to download repository",
-            detail=str(e)
+            detail=str(e),
         )

@@ -730,11 +730,143 @@ class ProjectAnalysisService:
                                     "fields": [],
                                 }
                             )
-
-                    # Try to use AST for more accurate model detection
                     try:
                         tree = ast.parse(content)
-                        # ... rest of AST parsing code ...
+                        for node in ast.walk(tree):
+                            if isinstance(node, ast.ClassDef):
+                                class_name = node.name
+
+                                # Check if this class inherits from Base or another SQLAlchemy base
+                                # or if it's already in our models list from above
+                                is_model = False
+                                for base in node.bases:
+                                    if isinstance(base, ast.Name) and base.id in [
+                                        "Base",
+                                        "Model",
+                                        "db.Model",
+                                    ]:
+                                        is_model = True
+                                        break
+
+                                # If this isn't a model by inheritance, check for tell-tale SQLAlchemy signs
+                                if not is_model:
+                                    # Check if class body has Column definitions or __tablename__
+                                    for item in node.body:
+                                        if (
+                                            isinstance(item, ast.Assign)
+                                            and isinstance(item.value, ast.Call)
+                                            and getattr(item.value.func, "id", "")
+                                            == "Column"
+                                        ):
+                                            is_model = True
+                                            break
+
+                                        if (
+                                            isinstance(item, ast.Assign)
+                                            and len(item.targets) == 1
+                                            and isinstance(item.targets[0], ast.Name)
+                                            and item.targets[0].id == "__tablename__"
+                                        ):
+                                            is_model = True
+                                            break
+
+                                # If we've identified this as a model
+                                if is_model:
+                                    # Check if we already added this class
+                                    already_added = any(
+                                        m["name"] == class_name and m["file"] == file
+                                        for m in models
+                                    )
+
+                                    if already_added:
+                                        # Update the existing entry with more details
+                                        for model in models:
+                                            if (
+                                                model["name"] == class_name
+                                                and model["file"] == file
+                                            ):
+                                                # Extract fields using ast
+                                                fields = []
+                                                table_name = None
+
+                                                # Look for __tablename__ attribute and Column definitions
+                                                for class_item in node.body:
+                                                    # Check for __tablename__ assignment
+                                                    if (
+                                                        isinstance(
+                                                            class_item, ast.Assign
+                                                        )
+                                                        and len(class_item.targets) == 1
+                                                        and isinstance(
+                                                            class_item.targets[0],
+                                                            ast.Name,
+                                                        )
+                                                        and class_item.targets[0].id
+                                                        == "__tablename__"
+                                                    ):
+
+                                                        if isinstance(
+                                                            class_item.value, ast.Str
+                                                        ):
+                                                            table_name = (
+                                                                class_item.value.s
+                                                            )
+
+                                                    # Look for field assignments with Column
+                                                    if (
+                                                        isinstance(
+                                                            class_item, ast.Assign
+                                                        )
+                                                        and len(class_item.targets) == 1
+                                                        and isinstance(
+                                                            class_item.targets[0],
+                                                            ast.Name,
+                                                        )
+                                                    ):
+
+                                                        field_name = class_item.targets[
+                                                            0
+                                                        ].id
+
+                                                        # Check if it's a Column definition
+                                                        is_column = False
+                                                        if (
+                                                            isinstance(
+                                                                class_item.value,
+                                                                ast.Call,
+                                                            )
+                                                            and isinstance(
+                                                                class_item.value.func,
+                                                                ast.Name,
+                                                            )
+                                                            and class_item.value.func.id
+                                                            == "Column"
+                                                        ):
+                                                            is_column = True
+
+                                                        if is_column:
+                                                            fields.append(field_name)
+
+                                                # Update the model with extra info
+                                                if table_name:
+                                                    model["table_name"] = table_name
+                                                if fields:
+                                                    model["fields"] = fields
+
+                                    else:
+                                        # Add as a new model
+                                        logger.info(
+                                            f"Found SQLAlchemy model via AST: {class_name} in {file}"
+                                        )
+                                        models.append(
+                                            {
+                                                "name": class_name,
+                                                "file": file,
+                                                "table_name": class_name.lower()
+                                                + "s",  # Default convention
+                                                "fields": [],  # We can fill this later if needed
+                                            }
+                                        )
 
                     except SyntaxError as e:
                         logger.error(f"Syntax error parsing {file_path}: {str(e)}")

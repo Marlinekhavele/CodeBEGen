@@ -146,6 +146,9 @@ class CodeGenerationService:
             # Initialize language template
             language_template = LanguageTemplateFactory.get_template(language)
 
+            # --- Extract entity name from prompt before generating components ---
+            entity_name = language_template.extract_entity_from_prompt(prompt)
+
             # Log generation start
             logger.info(f"Generating code in {language} for: {prompt}")
             await self._notify_info(
@@ -156,6 +159,7 @@ class CodeGenerationService:
             primary_component = await self._generate_primary_component(
                 language_template,
                 project_id,
+                entity_name,  # Pass the unified entity name
                 prompt,
                 method,
                 endpoint_path,
@@ -198,7 +202,7 @@ class CodeGenerationService:
                 )
 
                 if existing_model:
-                    # Handle model updates
+                    # Handle model updates using ModelSchemaManager
                     await self._handle_existing_model(
                         result,
                         project_id,
@@ -246,6 +250,7 @@ class CodeGenerationService:
         self,
         language_template,
         project_id,
+        entity_name,  # <-- add this parameter
         prompt,
         method,
         endpoint_path,
@@ -260,6 +265,7 @@ class CodeGenerationService:
         Args:
             language_template: Template for the target programming language
             project_id: Identifier for the project being modified
+            entity_name: Name of the entity the component is for
             prompt: Natural language description of the desired functionality
             method: HTTP method for the endpoint (GET, POST, etc.)
             endpoint_path: URL path for the endpoint
@@ -281,7 +287,7 @@ class CodeGenerationService:
             language_template,
             endpoint_component,
             project_id,
-            "temp",
+            entity_name,  # Use the unified entity name
             prompt,
             method=method,
             endpoint_path=endpoint_path,
@@ -303,10 +309,13 @@ class CodeGenerationService:
         Returns:
             str: The extracted entity name or "User" as a fallback if extraction fails
         """
+        existing_entity = primary_component.get("entity_name")
+        if existing_entity:
+            return existing_entity
         extracted_name = language_template.extract_entity_from_code(
             primary_component.get("generated_code", "")
         )
-        return extracted_name or "User"
+        return extracted_name or primary_component.get("entity_name") or "Entity"
 
     def _initialize_result_dictionary(
         self,
@@ -353,9 +362,8 @@ class CodeGenerationService:
         """
         Handle updates to an existing model when generating code for an entity that already exists.
 
-        This method checks for an existing model and determines if updates are needed based
-        on the new endpoint's requirements. If updates are needed, it generates schema changes
-        and migrations to accommodate the new functionality while preserving existing data.
+        This method uses ModelSchemaManager to check for an existing model and updates it if needed
+        based on the new endpoint's requirements.
 
         Args:
             result: Dictionary to store generation results
@@ -373,115 +381,119 @@ class CodeGenerationService:
             f"Found existing model for {entity_name}, checking for updates..."
         )
 
-        # Process potential model updates
-        update_result = await self._check_and_update_existing_model(
+        # Process potential model updates using ModelSchemaManager
+        update_result = await ModelSchemaManager.process_model_changes(
             project_id=project_id,
             entity_name=entity_name,
             prompt_description=prompt,
             endpoint_code=primary_component.get("generated_code", ""),
+            generate_migration=True,  # Generate migration if needed
             language=language,
         )
 
         if update_result and update_result.get("model_updated", False):
             # Model was updated
             await self._notify_info(f"Updated existing model {entity_name}")
-            await self._process_model_updates(
-                result, update_result, entity_name, project_id, language
-            )
-        else:
-            await self._notify_info(
-                f"No updates needed for existing model {entity_name}"
-            )
 
-    async def _process_model_updates(
-        self, result, update_result, entity_name, project_id, language
-    ):
-        """
-        Process model updates and add them to the result dictionary.
+            # Extract the raw content from base64
+            raw_model_content = ""
+            if update_result.get("content_base64"):
+                try:
+                    import base64
 
-        This method handles the results of model updates, including updating the
-        model itself, schemas, and generating migrations when necessary.
+                    raw_model_content = base64.b64decode(
+                        update_result.get("content_base64")
+                    ).decode("utf-8")
+                except Exception as e:
+                    logger.error(f"Error decoding model content: {str(e)}")
 
-        Args:
-            result: Dictionary to store generation results
-            update_result: Dictionary containing model update details
-            entity_name: Name of the entity being updated
-            project_id: Identifier for the project being modified
+                    # Fallback: try to get content from files_to_commit
+                    if update_result.get("files_to_commit"):
+                        model_file_path = update_result.get("model_file")
+                        for file_info in update_result.get("files_to_commit", []):
+                            if file_info.get("file_path") == model_file_path:
+                                raw_model_content = file_info.get("content", "")
+                                break
 
-        Returns:
-            None: Results are added directly to the result dictionary
-        """
-        # Add model update details
-        result["model"] = {
-            "exists": True,
-            "updated": True,
-            "entity_name": entity_name,
-            "file_path": update_result.get("model_file"),
-            "generated_code": update_result.get("content_base64"),
-            "update_details": update_result.get("field_changes"),
-        }
-
-        # Add schema update results if applicable
-        if update_result.get("schema_updated", False):
-            # Get the schema code from the update result
-            schema_code = update_result.get(
-                "schema_code", "# Updated schema code not available"
-            )
-            schema_results = update_result.get("schema_results", [])
-            result["schema"] = {
-                "file_path": update_result.get(
-                    "schema_file",
-                    f"schemas/{entity_name.lower()}{LangchainService.get_file_extension(language)}",
-                ),
-                "generated_code": schema_code,
-                "content_base64": update_result.get(
-                    "schema_content_base64",
-                    LangchainService.encode_content(schema_code),
-                ),
-                "file_hash": update_result.get(
-                    "schema_file_hash",
-                    LangchainService.generate_file_hash(schema_code),
-                ),
+            # Add model update details
+            result["model"] = {
                 "exists": True,
                 "updated": True,
                 "entity_name": entity_name,
-                "schema_details": schema_results,
+                "file_path": update_result.get("model_file"),
+                "generated_code": raw_model_content,
+                "content_base64": update_result.get("content_base64"),
+                "file_hash": update_result.get("file_hash"),
+                "update_details": update_result.get("field_changes"),
             }
+
+            # Add schema update results if applicable
+            if update_result.get("schema_updated", False):
+                # Get the schema code from the update result
+                schema_code = update_result.get("schema_code")
+                # Check if schema_co                                                                                                                                                                                                                                de is None and provide a default if needed
+                if schema_code is None:
+                    # Try to get schema content from schema_results
+                    for schema_result in update_result.get("schema_results", []):
+                        if schema_result.get("content"):
+                            schema_code = schema_result.get("content")
+                            break
+
+                    # If still None, use a placeholder
+                    if schema_code is None:
+                        schema_code = f"# Schema for {entity_name}"
+                schema_results = update_result.get("schema_results", [])
+                result["schema"] = {
+                    "file_path": update_result.get(
+                        "schema_file",
+                        f"schemas/{entity_name.lower()}{LangchainService.get_file_extension(language)}",
+                    ),
+                    "generated_code": schema_code,
+                    "content_base64": update_result.get(
+                        "schema_content_base64",
+                        LangchainService.encode_content(schema_code),
+                    ),
+                    "file_hash": update_result.get(
+                        "schema_file_hash",
+                        LangchainService.generate_file_hash(schema_code),
+                    ),
+                    "exists": True,
+                    "updated": True,
+                    "entity_name": entity_name,
+                    "schema_details": schema_results,
+                }
+
+            # Add migration if it was generated during the update
+            if update_result.get("migration"):
+                result["migration"] = update_result.get("migration")
+
+                if (
+                    "file_hash" not in result["migration"]
+                    and "generated_code" in result["migration"]
+                ):
+                    result["migration"]["file_hash"] = (
+                        LangchainService.generate_file_hash(
+                            result["migration"]["generated_code"]
+                        )
+                    )
+                if (
+                    "content_base64" not in result["migration"]
+                    and "generated_code" in result["migration"]
+                ):
+                    result["migration"]["content_base64"] = (
+                        LangchainService.encode_content(
+                            result["migration"]["generated_code"]
+                        )
+                    )
+
+            # Add files to commit from the update
+            if update_result.get("files_to_commit"):
+                if "files_to_commit" not in result:
+                    result["files_to_commit"] = []
+                result["files_to_commit"].extend(update_result.get("files_to_commit"))
         else:
-            placeholder_schema = f"# No updates needed for the schema of {entity_name}"
-            result["schema"] = {
-                "file_path": f"schemas/{entity_name.lower()}{LangchainService.get_file_extension(language)}",
-                "generated_code": placeholder_schema,
-                "content_base64": LangchainService.encode_content(placeholder_schema),
-                "file_hash": LangchainService.generate_file_hash(placeholder_schema),
-                "exists": True,
-                "updated": False,
-                "entity_name": entity_name,
-            }
-
-        # Add migration if it was generated during the update
-        if update_result.get("migration"):
-            result["migration"] = update_result.get("migration")
-
-            if (
-                "file_hash" not in result["migration"]
-                and "generated_code" in result["migration"]
-            ):
-                result["migration"]["file_hash"] = LangchainService.generate_file_hash(
-                    result["migration"]["generated_code"]
-                )
-            if (
-                "content_base64" not in result["migration"]
-                and "generated_code" in result["migration"]
-            ):
-                result["migration"]["content_base64"] = LangchainService.encode_content(
-                    result["migration"]["generated_code"]
-                )
-
-        # Process files to commit from the update
-        if update_result.get("files_to_commit"):
-            await self._commit_updated_files(
-                project_id, update_result.get("files_to_commit")
+            await self._notify_info(
+                f"No updates needed for existing model {entity_name}"
             )
 
     async def _generate_new_components(
@@ -642,153 +654,14 @@ class CodeGenerationService:
             logger.error(f"Error checking for existing model: {str(e)}", exc_info=True)
             return None
 
-    async def _check_and_update_existing_model(
-        self, project_id, entity_name, prompt_description, endpoint_code, language
-    ):
-        """
-        Check if entity already exists and update it if needed based on the new endpoint.
-
-        This method analyzes the requested endpoint functionality against an existing model
-        to determine if modifications are needed. If changes are required, it generates
-        updates to the model and related schema, and may create a migration.
-
-        Args:
-            project_id: Identifier for the project being modified
-            entity_name: Name of the entity to check and potentially update
-            prompt_description: Natural language description of the desired functionality
-            endpoint_code: Generated code for the endpoint/controller
-            language: Target programming language
-
-        Returns:
-            Dict or None: Update results if updates were made, None if no updates needed
-                or if the model doesn't exist
-
-        Raises:
-            Exception: Errors during model updating are caught and logged
-        """
-        try:
-            # Verify the model exists
-            existing_model = await self._check_for_existing_model(
-                project_id, entity_name
-            )
-            if not existing_model:
-                return None
-
-            logger.info(
-                f"Found existing model for entity {entity_name}, analyzing potential updates"
-            )
-
-            # Process model changes
-            update_result = await ModelSchemaManager.process_model_changes(
-                project_id=project_id,
-                entity_name=entity_name,
-                prompt_description=prompt_description,
-                endpoint_code=endpoint_code,
-                generate_migration=False,  # Don't generate migration automatically
-                language=language,
-            )
-
-            # Generate migration if model was updated
-            if update_result and update_result.get("model_updated", False):
-                logger.info("Model was updated, generating migration")
-
-                # Get language template
-                language_template = LanguageTemplateFactory.get_template(language)
-                component_map = language_template.get_component_map()
-
-                # Check if this language supports migrations
-                migration_component = component_map.get("migration")
-                if migration_component:
-                    migration_result = await self._generate_component(
-                        language_template=language_template,
-                        component_type=migration_component,
-                        project_id=project_id,
-                        entity_name=entity_name,
-                        entity_description=prompt_description,
-                        model_code=update_result.get("content_base64", None),
-                    )
-
-                    # Add migration to files to commit
-                    if migration_result and "generated_code" in migration_result:
-                        logger.info(
-                            f"Adding migration to commit: {migration_result.get('file_path')}"
-                        )
-
-                        if "files_to_commit" not in update_result:
-                            update_result["files_to_commit"] = []
-
-                        update_result["files_to_commit"].append(
-                            {
-                                "file_path": migration_result.get("file_path"),
-                                "commit_message": f"feat: Add migration for {entity_name} model changes",
-                                "content": migration_result.get("generated_code"),
-                            }
-                        )
-
-                        update_result["migration"] = migration_result
-
-            return update_result
-        except Exception as e:
-            logger.error(f"Error checking for existing model: {str(e)}", exc_info=True)
-            return None
-
-    async def _commit_updated_files(self, project_id, files_to_commit):
-        """
-        Commit updated files to Git repository individually.
-
-        This method handles committing multiple files to Git with individual commit
-        messages, typically used when updating existing models and related components.
-
-        Args:
-            project_id: Identifier for the project repository
-            files_to_commit: List of dictionaries containing file paths, content, and commit messages
-
-        Returns:
-            Dict: Results of commit operations by file path
-
-        Raises:
-            Exception: Errors during Git operations are caught and logged
-        """
-
-        commit_results = {}
-
-        try:
-            for file_info in files_to_commit:
-                file_path = file_info.get("file_path")
-                content = file_info.get("content")
-                commit_message = file_info.get("commit_message")
-
-                if not file_path or not content:
-                    logger.warning(
-                        f"Skipping commit for file with missing path or content: {file_path}"
-                    )
-                    continue
-
-                logger.info(f"Committing updated file: {file_path}")
-                commit_result = await GitService.commit_file_update(
-                    project_id=project_id,
-                    new_code=content,
-                    file_path=file_path,
-                    commit_message=commit_message or f"Update {file_path}",
-                )
-
-                commit_results[file_path] = commit_result
-
-            return commit_results
-        except Exception as e:
-            logger.error(f"Error committing updated files: {str(e)}", exc_info=True)
-            return {"error": str(e)}
-
     async def _commit_files_to_git(
         self, project_id, generation_result, language, language_template
     ):
         """
-        Commit all generated files to Git repository following language-specific commit strategy.
+        Commit all generated files to Git repository.
 
-        This method handles committing all generated components to Git following a
-        language-specific commit strategy that defines the order and commit messages.
-        It attempts to use the language template's commit strategy first, and falls back
-        to a legacy approach if that fails.
+        This method handles committing all components to Git with appropriate commit messages,
+        ensuring each file is only committed once.
 
         Args:
             project_id: Identifier for the project repository
@@ -798,166 +671,117 @@ class CodeGenerationService:
 
         Returns:
             Dict: Results of commit operations by component type
-
-        Raises:
-            Exception: Errors in commit strategy are caught and handled by falling back
-                to the legacy commit method
         """
+        git_results = {}
+        entity_name = generation_result.get("entity_name", "Entity")
+
+        # Determine commit order and messages
         try:
-            # Get commit strategy from language template
+            # Try to get language-specific commit strategy
             commit_strategy = language_template.get_commit_strategy()
             commit_order = commit_strategy.get("commit_order", [])
             commit_messages = commit_strategy.get("commit_messages", {})
+        except Exception:
+            # Fallback to default order if strategy retrieval fails
+            commit_order = [
+                "model",
+                "schema",
+                "migration",
+                "endpoint",
+                "controller",
+                "helpers",
+                "utils",
+                "route",
+                "validation",
+            ]
+            commit_messages = {}
 
-            # Get entity name for commit messages
-            entity_name = generation_result.get("entity_name", "Entity")
+        # Process each component type in order
+        for component_type in commit_order:
+            # Handle component aliases (e.g., controller/endpoint, validation/schema)
+            if component_type == "controller":
+                component_data = generation_result.get(
+                    "controller"
+                ) or generation_result.get("endpoint", {})
+            elif component_type == "validation":
+                component_data = generation_result.get(
+                    "validation"
+                ) or generation_result.get("schema", {})
+            elif component_type == "utils":
+                component_data = generation_result.get(
+                    "utils"
+                ) or generation_result.get("helpers", {})
+            else:
+                component_data = generation_result.get(component_type, {})
 
-            # Initialize results
-            git_results = {}
+            # Skip if component doesn't exist or was already committed
+            if not component_data or component_data.get("already_committed", False):
+                continue
 
-            # Commit files in the specified order
-            for component in commit_order:
-                component_data = generation_result.get(component)
+            # Skip if no generated code or file path
+            if not component_data.get("generated_code") or not component_data.get(
+                "file_path"
+            ):
+                continue
 
-                # Skip if component doesn't exist
-                if not component_data:
-                    continue
+            # Skip if component exists but wasn't actually updated (except endpoints which should always be committed)
+            if (
+                component_data.get("exists", False)
+                and not component_data.get("updated", False)
+                and component_type not in ["endpoint", "controller"]
+            ):
+                logger.info(
+                    f"Skipping commit for {component_type} as it exists but wasn't updated: {component_data.get('file_path')}"
+                )
+                continue
 
-                try:
-                    # Format commit message
-                    message_template = commit_messages.get(
-                        component, f"Add {component} for {entity_name}"
-                    )
-
-                    # Replace placeholders in message
+            try:
+                # Determine appropriate commit message
+                if component_type in commit_messages:
+                    # Use language template's message format
+                    message_template = commit_messages[component_type]
                     commit_message = message_template.format(
                         entity_name=entity_name,
                         method=component_data.get("method", "GET"),
                         endpoint_path=component_data.get("endpoint_path", ""),
                     )
+                else:
+                    # Use default message format based on component type
+                    if component_type in ["endpoint", "controller"]:
+                        commit_message = f"Add {component_data.get('method', 'GET')} endpoint for {component_data.get('endpoint_path', '')}"
+                    elif component_type == "migration":
+                        commit_message = f"Add migration for {entity_name} model"
+                    else:
+                        # Generic message for other component types
+                        component_name = component_type.replace("_", " ")
+                        commit_message = f"Add {entity_name} {component_name}"
 
-                    # Commit the file
-                    commit_result = await GitService.commit_file_update(
-                        project_id=project_id,
-                        new_code=component_data.get("generated_code", ""),
-                        file_path=component_data.get("file_path", ""),
-                        commit_message=commit_message,
-                    )
+                    # Add "Update" instead of "Add" for existing components
+                    if component_data.get("exists", False) and component_data.get(
+                        "updated", False
+                    ):
+                        commit_message = commit_message.replace("Add", "Update")
 
-                    git_results[component] = commit_result
-                    logger.info(
-                        f"Committed {component} file: {component_data.get('file_path')}"
-                    )
-
-                except Exception as e:
-                    logger.error(f"Failed to commit {component}: {e}")
-
-            return git_results
-        except Exception as e:
-            logger.error(f"Error in commit strategy: {str(e)}", exc_info=True)
-            return await self._legacy_commit_files_to_git(project_id, generation_result)
-
-    async def _legacy_commit_files_to_git(self, project_id, generation_result):
-        """
-        Legacy method for committing files to Git (fallback strategy).
-
-        This method provides a fallback approach for committing generated files
-        when the language-specific commit strategy fails. It uses a predefined
-        component order and generic commit messages.
-
-        Args:
-            project_id: Identifier for the project repository
-            generation_result: Dictionary containing all generated components
-
-        Returns:
-            Dict: Results of commit operations by component type
-        """
-        git_results = {}
-
-        # Handle endpoints/controllers
-        try:
-            endpoint = generation_result.get("endpoint", {}) or generation_result.get(
-                "controller", {}
-            )
-            if endpoint:
-                endpoint_commit = await GitService.commit_file_update(
+                # Commit the file
+                commit_result = await GitService.commit_file_update(
                     project_id=project_id,
-                    new_code=endpoint.get("generated_code", ""),
-                    file_path=endpoint.get("file_path", ""),
-                    commit_message=f"Add {endpoint.get('method', 'GET')} endpoint for {endpoint.get('endpoint_path', '')}",
+                    new_code=component_data.get("generated_code", ""),
+                    file_path=component_data.get("file_path", ""),
+                    commit_message=commit_message,
                 )
-                git_results["endpoint"] = endpoint_commit
-        except Exception as e:
-            logger.error(f"Failed to commit endpoint: {e}")
 
-        # Handle models and related components
-        model = generation_result.get("model")
-        if model and not model.get("exists", False):
-            try:
-                # Commit model
-                model_commit = await GitService.commit_file_update(
-                    project_id=project_id,
-                    new_code=model.get("generated_code", ""),
-                    file_path=model.get("file_path", ""),
-                    commit_message=f"Add {model.get('entity_name', 'Entity')} model",
+                # Store the result
+                git_results[component_type] = commit_result
+
+                # Mark as committed to avoid duplicate commits
+                component_data["already_committed"] = True
+
+                logger.info(
+                    f"Committed {component_type} file: {component_data.get('file_path')}"
                 )
-                git_results["model"] = model_commit
 
-                # Commit schema/validation
-                schema = generation_result.get("schema", {}) or generation_result.get(
-                    "validation", {}
-                )
-                if schema:
-                    schema_commit = await GitService.commit_file_update(
-                        project_id=project_id,
-                        new_code=schema.get("generated_code", ""),
-                        file_path=schema.get("file_path", ""),
-                        commit_message=f"Add {schema.get('entity_name', 'Entity')} schema",
-                    )
-                    git_results["schema"] = schema_commit
-
-                # Commit migration if exists
-                migration = generation_result.get("migration", {})
-                if migration and migration.get("generated_code"):
-                    migration_commit = await GitService.commit_file_update(
-                        project_id=project_id,
-                        new_code=migration.get("generated_code", ""),
-                        file_path=migration.get("file_path", ""),
-                        commit_message=f"Add migration for {migration.get('entity_name', 'Entity')} model",
-                    )
-                    git_results["migration"] = migration_commit
             except Exception as e:
-                logger.error(f"Failed to commit model/schema/migration: {e}")
-
-        # Handle helpers/utils
-        try:
-            helpers = generation_result.get("helpers", {}) or generation_result.get(
-                "utils", {}
-            )
-            if helpers:
-                helpers_commit = await GitService.commit_file_update(
-                    project_id=project_id,
-                    new_code=helpers.get("generated_code", ""),
-                    file_path=helpers.get("file_path", ""),
-                    commit_message=f"Add helper functions for {helpers.get('entity_name', 'Entity')}",
-                )
-                git_results["helpers"] = helpers_commit
-        except Exception as e:
-            logger.error(f"Failed to commit helpers: {e}")
-
-        # Handle routes (JavaScript specific)
-        try:
-            route = generation_result.get("route", {})
-            if route:
-                route_commit = await GitService.commit_file_update(
-                    project_id=project_id,
-                    new_code=route.get("generated_code", ""),
-                    file_path=route.get("file_path", ""),
-                    commit_message=f"Add routes for {route.get('entity_name', 'Entity')} API",
-                )
-                git_results["route"] = route_commit
-        except Exception as e:
-            logger.error(f"Failed to commit route: {e}")
+                logger.error(f"Failed to commit {component_type}: {str(e)}")
 
         return git_results
 

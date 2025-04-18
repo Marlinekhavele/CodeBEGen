@@ -75,7 +75,7 @@ class GitService:
             )
 
             # Commit the changes
-            commit_message = f"Update code in {file_path.relative_to(project_dir)}"
+            commit_message = f'Update code in "{file_path.relative_to(project_dir)}"'
             logger.info(
                 f"Committing file to Git repository with message: {commit_message}"
             )
@@ -146,7 +146,7 @@ class GitService:
 
             # Prepare commit message
             if not commit_message:
-                commit_message = f"Add/update {file_path}"
+                commit_message = f'Add/update "{file_path}"'
             logger.info(
                 f"Committing file to Git repository with message: {commit_message}"
             )

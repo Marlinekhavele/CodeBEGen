@@ -700,10 +700,10 @@ class ProjectAnalysisService:
 
                     # Read file content
                     try:
-                        with open(file_path, "r") as f:
+                        with open(file_path, "r", encoding="utf-8") as f:
                             content = f.read()
-                    except IOError as io_error:
-                        logger.error(f"Error reading file {file_path}: {str(io_error)}")
+                    except Exception as e:
+                        logger.error(f"Error reading file {file_path}: {str(e)}")
                         continue
 
                     # First try simple class name extraction to ensure we don't miss anything
@@ -730,15 +730,13 @@ class ProjectAnalysisService:
                                     "fields": [],
                                 }
                             )
-
-                    """ Try to use AST for more accurate model detection """
                     try:
                         tree = ast.parse(content)
                         for node in ast.walk(tree):
                             if isinstance(node, ast.ClassDef):
                                 class_name = node.name
 
-                                # To Check if this class inherits from Base or another SQLAlchemy base
+                                # Check if this class inherits from Base or another SQLAlchemy base
                                 # or if it's already in our models list from above
                                 is_model = False
                                 for base in node.bases:
@@ -872,6 +870,55 @@ class ProjectAnalysisService:
 
                     except SyntaxError as e:
                         logger.error(f"Syntax error parsing {file_path}: {str(e)}")
+
+                        # Fallback approach: use regex to extract model information
+                        # This is more lenient than AST parsing when dealing with syntax errors
+                        try:
+                            # Look for class definitions
+                            class_pattern = re.compile(r"class\s+(\w+)\s*\(.*\):")
+                            for match in class_pattern.finditer(content):
+                                class_name = match.group(1)
+
+                                # Look for signs this is a model
+                                class_section = content[match.start() :]
+
+                                # Check if it inherits from a model base class
+                                is_model = False
+                                base_pattern = re.compile(r"class\s+\w+\s*\(([^)]+)\):")
+                                base_match = base_pattern.search(class_section)
+                                if base_match:
+                                    bases = base_match.group(1).split(",")
+                                    if any(
+                                        base.strip() in ["Base", "Model", "db.Model"]
+                                        for base in bases
+                                    ):
+                                        is_model = True
+
+                                # Check for sqlalchemy Column definitions
+                                if not is_model and "Column(" in class_section:
+                                    is_model = True
+
+                                if is_model:
+                                    # Check if already in models list
+                                    if not any(
+                                        m["name"] == class_name and m["file"] == file
+                                        for m in models
+                                    ):
+                                        logger.info(
+                                            f"Found model via regex fallback: {class_name} in {file}"
+                                        )
+                                        models.append(
+                                            {
+                                                "name": class_name,
+                                                "file": file,
+                                                "table_name": class_name.lower() + "s",
+                                                "fields": [],
+                                            }
+                                        )
+                        except Exception as regex_error:
+                            logger.error(
+                                f"Regex fallback also failed for {file_path}: {str(regex_error)}"
+                            )
 
         logger.info(
             f"Found a total of {len(models)} models: {[m['name'] for m in models]}"

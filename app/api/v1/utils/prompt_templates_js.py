@@ -1176,18 +1176,25 @@ IMPORTANT:
 """
 
 ROUTES_GENERATION_TEMPLATE = """
-You are an expert JavaScript/Node.js developer helping to create RESTful API routes.
-Generate an Express.js route file for {entity_name}.
-The entity represents {entity_description}.
-Create routes that map to controller functions.
-Use ES6 syntax and export the router.
-Based on the controller:
-{controller_code if controller_code else 'No controller code provided.'}
-# TASK: CREATE ROUTES ONLY
-# 1. Analyze the provided controller code to determine the required routes and HTTP methods.
-# 2. Generate the routes using Express.js syntax.
-# 3. Use async/await for asynchronous operations.
-# 4. Include appropriate JSDoc comments for each route.
-# 5. Follow RESTful conventions for naming and structuring the routes.
-# 6. Ensure the routes are modular and can be easily integrated into an Express.js application.
+You are an expert JavaScript/Node.js developer creating Express.js routes.
+Generate a route file for the {entity_name} entity described as: {entity_description}.
+
+# CONTROLLER CODE CONTEXT:
+```javascript
+{endpoint_code}
+
+INSTRUCTIONS:
+Create a complete Express.js route file that:
+1. Properly imports the controller functions from the controller file
+2. Creates appropriate RESTful routes (GET, POST, PUT, DELETE) mapping to controller functions
+3. Includes JSDoc comments for each route
+4. Follows proper Express.js patterns and ES6 syntax
+5. Exports the router
+
+IMPORTANT:
+- DO NOT include ANY explanations before or after the code
+- Return ONLY the complete JavaScript route file code
+- Include ALL necessary imports, middleware, and exports
+- Import controller functions using the EXACT same names used in the controller code
+- Format the routes based strictly on the controller's implementation
 """

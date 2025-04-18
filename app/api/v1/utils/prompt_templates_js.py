@@ -1174,3 +1174,27 @@ IMPORTANT:
 4. For modifications, include the complete field definition.
 5. Do NOT suggest any changes to standard fields like _id, id, createdAt, updatedAt.
 """
+
+ROUTES_GENERATION_TEMPLATE = """
+You are an expert JavaScript/Node.js developer creating Express.js routes.
+Generate a route file for the {entity_name} entity described as: {entity_description}.
+
+# CONTROLLER CODE CONTEXT:
+```javascript
+{endpoint_code}
+
+INSTRUCTIONS:
+Create a complete Express.js route file that:
+1. Properly imports the controller functions from the controller file
+2. Creates appropriate RESTful routes (GET, POST, PUT, DELETE) mapping to controller functions
+3. Includes JSDoc comments for each route
+4. Follows proper Express.js patterns and ES6 syntax
+5. Exports the router
+
+IMPORTANT:
+- DO NOT include ANY explanations before or after the code
+- Return ONLY the complete JavaScript route file code
+- Include ALL necessary imports, middleware, and exports
+- Import controller functions using the EXACT same names used in the controller code
+- Format the routes based strictly on the controller's implementation
+"""

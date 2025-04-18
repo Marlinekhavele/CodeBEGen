@@ -195,22 +195,13 @@ class JavaScriptTemplate(LanguageTemplate):
         """
         # Map component types to PromptManager template names
         template_map = {
-            "controller": "endpoint",  # In PromptManager templates, this is called "endpoint"
+            "controller": "endpoint",
             "model": "model",
-            "validation": "schema",  # In PromptManager templates, this is called "schema"
+            "validation": "schema",
             "migration": "migration",
-            "utils": "helpers",  # In PromptManager templates, this is called "helpers"
+            "utils": "helpers",
+            "route": "route",
         }
-
-        # Route component doesn't have a specific template in PromptManager,
-        # so we'll handle it separately
-        if component_type == "route":
-            return await self._generate_route(
-                project_id,
-                entity_name,
-                entity_description,
-                kwargs.get("controller_code"),
-            )
 
         # For components with templates in PromptManager
         if component_type in template_map:
@@ -266,7 +257,7 @@ class JavaScriptTemplate(LanguageTemplate):
         controller_code: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Generate a JavaScript Express route file.
+        Generate a JavaScript Express route file using PromptManager templates.
 
         Args:
             project_id (str): Identifier for the project being modified
@@ -277,23 +268,17 @@ class JavaScriptTemplate(LanguageTemplate):
         Returns:
             Dict[str, Any]: Route component data including generated code and metadata
         """
-        # Create a custom prompt for Express.js routes
-        route_prompt = f"""
-        Generate an Express.js route file for {entity_name}.
-        The entity represents {entity_description}.
-        Create routes that map to controller functions.
-        Use ES6 syntax and export the router.
+        # Prepare template variables
+        template_vars = {
+            "entity_name": entity_name,
+            "entity_description": entity_description,
+            "endpoint_description": entity_description,
+            "endpoint_code": controller_code or "",
+        }
 
-        Based on the controller:
-        {controller_code if controller_code else 'No controller code provided.'}
-        """
-
-        # Use custom generation for JavaScript
-        result = await LangchainService.generate_custom_code(
-            project_id=project_id,
-            prompt=route_prompt,
-            language="javascript",
-            context=controller_code,
+        # Generate code using the route template from PromptManager
+        result = await LangchainService.generate_code_with_template(
+            template_name="route", language="javascript", **template_vars
         )
 
         # Add language-specific metadata

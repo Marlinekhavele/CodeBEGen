@@ -432,6 +432,17 @@ class CodeGenerationService:
             if update_result.get("schema_updated", False):
                 # Get the schema code from the update result
                 schema_code = update_result.get("schema_code")
+                # Check if schema_co                                                                                                                                                                                                                                de is None and provide a default if needed
+                if schema_code is None:
+                    # Try to get schema content from schema_results
+                    for schema_result in update_result.get("schema_results", []):
+                        if schema_result.get("content"):
+                            schema_code = schema_result.get("content")
+                            break
+                    
+                    # If still None, use a placeholder
+                    if schema_code is None:
+                        schema_code = f"# Schema for {entity_name}"
                 schema_results = update_result.get("schema_results", [])
                 result["schema"] = {
                     "file_path": update_result.get(

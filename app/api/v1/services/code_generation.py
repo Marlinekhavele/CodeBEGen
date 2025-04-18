@@ -439,7 +439,7 @@ class CodeGenerationService:
                         if schema_result.get("content"):
                             schema_code = schema_result.get("content")
                             break
-                    
+
                     # If still None, use a placeholder
                     if schema_code is None:
                         schema_code = f"# Schema for {entity_name}"

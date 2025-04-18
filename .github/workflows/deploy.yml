@@ -41,8 +41,6 @@ jobs:
             SECRET_KEY=${{ secrets.SECRET_KEY }}
             ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY}}
             ENVIRONMENT=production
-            EOL
-            
             # Database configuration
             DB_HOST=${{ secrets.DB_HOST }}
             DB_PORT=5432
@@ -50,10 +48,20 @@ jobs:
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             DB_NAME=${{ secrets.DB_NAME }}
             DB_TYPE=${{ secrets.DB_TYPE }}
+            # Gitea configuration
+            CODE_BE_GEN_BASE_URL=${{ secrets.CODE_BE_GEN_BASE_URL }}
+            GITEA_API_URL=${{ secrets.GITEA_API_URL }}
+            GITEA_TOKEN=${{ secrets.GITEA_TOKEN}}            
+            GIT_USER_NAME=${{ secrets.GIT_USER_NAME }}
+            GIT_USER_EMAIL=${{ secrets.GIT_USER_EMAIL }}
+        
             EOL
            
             # Ensure proper permissions for env file
             chmod 600 .env
+            # Run Alembic migrations
+            echo "Running Alembic migrations..."
+            alembic upgrade head
            
             # Restart the FastAPI service using systemd
             echo "Restarting FastAPI service..."

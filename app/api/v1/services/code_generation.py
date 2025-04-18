@@ -148,7 +148,6 @@ class CodeGenerationService:
 
             # --- Extract entity name from prompt before generating components ---
             entity_name = language_template.extract_entity_from_prompt(prompt)
-            print(f"Extracted entity name from prompt: '{entity_name}'")
 
             # Log generation start
             logger.info(f"Generating code in {language} for: {prompt}")

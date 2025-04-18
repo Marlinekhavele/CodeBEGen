@@ -637,11 +637,11 @@ class ModelSchemaManager:
                 {endpoint_code}
                 ```
                 """
-                
+
             # Use PromptManager to get and format the template
             # Get the appropriate template name based on language
             template_name = "model_changes"
-            
+
             # Format the template using PromptManager - avoid passing language twice
             formatted_prompt = PromptManager.format_template(
                 template_name=template_name,
@@ -664,7 +664,9 @@ class ModelSchemaManager:
 
             try:
                 changes = json.loads(changes_text)
-                logger.info(f"Parsed {len(changes)} change operations for {entity_name}")
+                logger.info(
+                    f"Parsed {len(changes)} change operations for {entity_name}"
+                )
 
                 # Validate the changes
                 validated_changes = []

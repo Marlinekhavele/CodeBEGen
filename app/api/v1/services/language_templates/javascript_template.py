@@ -139,20 +139,21 @@ class JavaScriptTemplate(LanguageTemplate):
         Returns a single entity name as a string.
         """
         import re
+
         prompt = prompt.lower()
-        
+
         # Regex patterns to match different common phrases
         patterns = [
-            r'\bfor managing (\w+)',             # for managing users
-            r'\bto manage (\w+)',                # to manage users
-            r'\bfor (\w+)',                      # for users
-            r'\bto create (\w+)',                # to create cars
-            r'\bto delete (\w+)',                # to delete accounts
-            r'\babout (\w+)',                    # about employees
-            r'\bof (\w+)',                       # list of cars
-            r'\bwith (\w+)',                     # with employees
+            r"\bfor managing (\w+)",  # for managing users
+            r"\bto manage (\w+)",  # to manage users
+            r"\bfor (\w+)",  # for users
+            r"\bto create (\w+)",  # to create cars
+            r"\bto delete (\w+)",  # to delete accounts
+            r"\babout (\w+)",  # about employees
+            r"\bof (\w+)",  # list of cars
+            r"\bwith (\w+)",  # with employees
         ]
-        
+
         for pattern in patterns:
             matches = re.findall(pattern, prompt)
             if matches:
@@ -163,10 +164,10 @@ class JavaScriptTemplate(LanguageTemplate):
                 elif entity.endswith("s") and not entity.endswith("ss"):
                     entity = entity[:-1]
                 return entity.capitalize()
-        
+
         # Fallback to capitalized word if no matches found
         match = re.search(r"\b([A-Z][a-zA-Z0-9_]*)\b", prompt)
-        return match.group(1) if match else "Temp" 
+        return match.group(1) if match else "Temp"
 
     async def generate_component(
         self,

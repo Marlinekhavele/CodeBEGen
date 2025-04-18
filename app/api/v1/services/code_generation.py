@@ -395,16 +395,19 @@ class CodeGenerationService:
         if update_result and update_result.get("model_updated", False):
             # Model was updated
             await self._notify_info(f"Updated existing model {entity_name}")
-            
+
             # Extract the raw content from base64
             raw_model_content = ""
             if update_result.get("content_base64"):
                 try:
                     import base64
-                    raw_model_content = base64.b64decode(update_result.get("content_base64")).decode("utf-8")
+
+                    raw_model_content = base64.b64decode(
+                        update_result.get("content_base64")
+                    ).decode("utf-8")
                 except Exception as e:
                     logger.error(f"Error decoding model content: {str(e)}")
-                    
+
                     # Fallback: try to get content from files_to_commit
                     if update_result.get("files_to_commit"):
                         model_file_path = update_result.get("model_file")
@@ -412,14 +415,14 @@ class CodeGenerationService:
                             if file_info.get("file_path") == model_file_path:
                                 raw_model_content = file_info.get("content", "")
                                 break
-            
+
             # Add model update details
             result["model"] = {
                 "exists": True,
                 "updated": True,
                 "entity_name": entity_name,
                 "file_path": update_result.get("model_file"),
-                "generated_code": raw_model_content, 
+                "generated_code": raw_model_content,
                 "content_base64": update_result.get("content_base64"),
                 "file_hash": update_result.get("file_hash"),
                 "update_details": update_result.get("field_changes"),
@@ -428,9 +431,7 @@ class CodeGenerationService:
             # Add schema update results if applicable
             if update_result.get("schema_updated", False):
                 # Get the schema code from the update result
-                schema_code = update_result.get(
-                    "schema_code"
-                )
+                schema_code = update_result.get("schema_code")
                 schema_results = update_result.get("schema_results", [])
                 result["schema"] = {
                     "file_path": update_result.get(
@@ -452,18 +453,27 @@ class CodeGenerationService:
                     "schema_details": schema_results,
                 }
 
-
             # Add migration if it was generated during the update
             if update_result.get("migration"):
                 result["migration"] = update_result.get("migration")
 
-                if "file_hash" not in result["migration"] and "generated_code" in result["migration"]:
-                    result["migration"]["file_hash"] = LangchainService.generate_file_hash(
-                        result["migration"]["generated_code"]
+                if (
+                    "file_hash" not in result["migration"]
+                    and "generated_code" in result["migration"]
+                ):
+                    result["migration"]["file_hash"] = (
+                        LangchainService.generate_file_hash(
+                            result["migration"]["generated_code"]
+                        )
                     )
-                if "content_base64" not in result["migration"] and "generated_code" in result["migration"]:
-                    result["migration"]["content_base64"] = LangchainService.encode_content(
-                        result["migration"]["generated_code"]
+                if (
+                    "content_base64" not in result["migration"]
+                    and "generated_code" in result["migration"]
+                ):
+                    result["migration"]["content_base64"] = (
+                        LangchainService.encode_content(
+                            result["migration"]["generated_code"]
+                        )
                     )
 
             # Add files to commit from the update
@@ -634,25 +644,27 @@ class CodeGenerationService:
             logger.error(f"Error checking for existing model: {str(e)}", exc_info=True)
             return None
 
-    async def _commit_files_to_git(self, project_id, generation_result, language, language_template):
+    async def _commit_files_to_git(
+        self, project_id, generation_result, language, language_template
+    ):
         """
         Commit all generated files to Git repository.
-        
+
         This method handles committing all components to Git with appropriate commit messages,
         ensuring each file is only committed once.
-        
+
         Args:
             project_id: Identifier for the project repository
             generation_result: Dictionary containing all generated components
             language: Target programming language
             language_template: Template for the target programming language
-            
+
         Returns:
             Dict: Results of commit operations by component type
         """
         git_results = {}
         entity_name = generation_result.get("entity_name", "Entity")
-        
+
         # Determine commit order and messages
         try:
             # Try to get language-specific commit strategy
@@ -661,35 +673,58 @@ class CodeGenerationService:
             commit_messages = commit_strategy.get("commit_messages", {})
         except Exception:
             # Fallback to default order if strategy retrieval fails
-            commit_order = ["model", "schema", "migration", "endpoint", "controller", 
-                            "helpers", "utils", "route", "validation"]
+            commit_order = [
+                "model",
+                "schema",
+                "migration",
+                "endpoint",
+                "controller",
+                "helpers",
+                "utils",
+                "route",
+                "validation",
+            ]
             commit_messages = {}
-        
+
         # Process each component type in order
         for component_type in commit_order:
             # Handle component aliases (e.g., controller/endpoint, validation/schema)
             if component_type == "controller":
-                component_data = generation_result.get("controller") or generation_result.get("endpoint", {})
+                component_data = generation_result.get(
+                    "controller"
+                ) or generation_result.get("endpoint", {})
             elif component_type == "validation":
-                component_data = generation_result.get("validation") or generation_result.get("schema", {})
+                component_data = generation_result.get(
+                    "validation"
+                ) or generation_result.get("schema", {})
             elif component_type == "utils":
-                component_data = generation_result.get("utils") or generation_result.get("helpers", {})
+                component_data = generation_result.get(
+                    "utils"
+                ) or generation_result.get("helpers", {})
             else:
                 component_data = generation_result.get(component_type, {})
-                
+
             # Skip if component doesn't exist or was already committed
             if not component_data or component_data.get("already_committed", False):
                 continue
-                
+
             # Skip if no generated code or file path
-            if not component_data.get("generated_code") or not component_data.get("file_path"):
+            if not component_data.get("generated_code") or not component_data.get(
+                "file_path"
+            ):
                 continue
-            
+
             # Skip if component exists but wasn't actually updated (except endpoints which should always be committed)
-            if component_data.get("exists", False) and not component_data.get("updated", False) and component_type not in ["endpoint", "controller"]:
-                logger.info(f"Skipping commit for {component_type} as it exists but wasn't updated: {component_data.get('file_path')}")
+            if (
+                component_data.get("exists", False)
+                and not component_data.get("updated", False)
+                and component_type not in ["endpoint", "controller"]
+            ):
+                logger.info(
+                    f"Skipping commit for {component_type} as it exists but wasn't updated: {component_data.get('file_path')}"
+                )
                 continue
-                
+
             try:
                 # Determine appropriate commit message
                 if component_type in commit_messages:
@@ -710,9 +745,11 @@ class CodeGenerationService:
                         # Generic message for other component types
                         component_name = component_type.replace("_", " ")
                         commit_message = f"Add {entity_name} {component_name}"
-                        
+
                     # Add "Update" instead of "Add" for existing components
-                    if component_data.get("exists", False) and component_data.get("updated", False):
+                    if component_data.get("exists", False) and component_data.get(
+                        "updated", False
+                    ):
                         commit_message = commit_message.replace("Add", "Update")
 
                 # Commit the file
@@ -722,18 +759,20 @@ class CodeGenerationService:
                     file_path=component_data.get("file_path", ""),
                     commit_message=commit_message,
                 )
-                
+
                 # Store the result
                 git_results[component_type] = commit_result
-                
+
                 # Mark as committed to avoid duplicate commits
                 component_data["already_committed"] = True
-                
-                logger.info(f"Committed {component_type} file: {component_data.get('file_path')}")
-                
+
+                logger.info(
+                    f"Committed {component_type} file: {component_data.get('file_path')}"
+                )
+
             except Exception as e:
                 logger.error(f"Failed to commit {component_type}: {str(e)}")
-                
+
         return git_results
 
     async def _notify_event(self, event_type, component_type, data):

@@ -678,26 +678,26 @@ class ProjectAnalysisService:
     def _analyze_models(models_dir: Path) -> List[Dict[str, Any]]:
         """
         Analyze model files in the project to extract database model information.
-        
+
         This improved method handles various SQLAlchemy patterns and model structures.
-        
+
         Args:
             models_dir (Path): Directory path containing database model files
-            
+
         Returns:
             List[Dict[str, Any]]: List of model dictionaries with detailed information
         """
         models = []
-        
+
         logger.info(f"Analyzing models directory: {models_dir}")
-        
+
         # Walk through the models directory
         for root, _, files in os.walk(models_dir):
             for file in files:
                 if file.endswith(".py") and file != "__init__.py":
                     file_path = Path(root) / file
                     logger.info(f"Examining potential model file: {file_path}")
-                    
+
                     # Read file content
                     try:
                         with open(file_path, "r", encoding="utf-8") as f:
@@ -705,17 +705,17 @@ class ProjectAnalysisService:
                     except Exception as e:
                         logger.error(f"Error reading file {file_path}: {str(e)}")
                         continue
-                    
+
                     # First try simple class name extraction to ensure we don't miss anything
                     class_names = ProjectAnalysisService._extract_class_names(content)
-                    
+
                     # Check for SQLAlchemy imports to determine if this is likely a model file
                     is_model_file = (
                         "sqlalchemy" in content
                         or "Column" in content
                         or "Base" in content
                     )
-                    
+
                     # Add all classes from possible model files to ensure we don't miss any
                     if is_model_file:
                         for class_name in class_names:
@@ -730,56 +730,69 @@ class ProjectAnalysisService:
                                     "fields": [],
                                 }
                             )
-                    
+
                     # Try to use AST for more accurate model detection
                     try:
                         tree = ast.parse(content)
                         # ... rest of AST parsing code ...
-                        
+
                     except SyntaxError as e:
                         logger.error(f"Syntax error parsing {file_path}: {str(e)}")
-                        
+
                         # Fallback approach: use regex to extract model information
                         # This is more lenient than AST parsing when dealing with syntax errors
                         try:
                             # Look for class definitions
-                            class_pattern = re.compile(r'class\s+(\w+)\s*\(.*\):')
+                            class_pattern = re.compile(r"class\s+(\w+)\s*\(.*\):")
                             for match in class_pattern.finditer(content):
                                 class_name = match.group(1)
-                                
+
                                 # Look for signs this is a model
-                                class_section = content[match.start():]
-                                
+                                class_section = content[match.start() :]
+
                                 # Check if it inherits from a model base class
                                 is_model = False
-                                base_pattern = re.compile(r'class\s+\w+\s*\(([^)]+)\):')
+                                base_pattern = re.compile(r"class\s+\w+\s*\(([^)]+)\):")
                                 base_match = base_pattern.search(class_section)
                                 if base_match:
-                                    bases = base_match.group(1).split(',')
-                                    if any(base.strip() in ['Base', 'Model', 'db.Model'] for base in bases):
+                                    bases = base_match.group(1).split(",")
+                                    if any(
+                                        base.strip() in ["Base", "Model", "db.Model"]
+                                        for base in bases
+                                    ):
                                         is_model = True
-                                
+
                                 # Check for sqlalchemy Column definitions
-                                if not is_model and 'Column(' in class_section:
+                                if not is_model and "Column(" in class_section:
                                     is_model = True
-                                    
+
                                 if is_model:
                                     # Check if already in models list
-                                    if not any(m['name'] == class_name and m['file'] == file for m in models):
-                                        logger.info(f"Found model via regex fallback: {class_name} in {file}")
-                                        models.append({
-                                            "name": class_name,
-                                            "file": file,
-                                            "table_name": class_name.lower() + "s",
-                                            "fields": [],
-                                        })
+                                    if not any(
+                                        m["name"] == class_name and m["file"] == file
+                                        for m in models
+                                    ):
+                                        logger.info(
+                                            f"Found model via regex fallback: {class_name} in {file}"
+                                        )
+                                        models.append(
+                                            {
+                                                "name": class_name,
+                                                "file": file,
+                                                "table_name": class_name.lower() + "s",
+                                                "fields": [],
+                                            }
+                                        )
                         except Exception as regex_error:
-                            logger.error(f"Regex fallback also failed for {file_path}: {str(regex_error)}")
-        
+                            logger.error(
+                                f"Regex fallback also failed for {file_path}: {str(regex_error)}"
+                            )
+
         logger.info(
             f"Found a total of {len(models)} models: {[m['name'] for m in models]}"
         )
         return models
+
     @staticmethod
     def _analyze_schemas(schemas_dir: Path) -> List[Dict[str, str]]:
         """

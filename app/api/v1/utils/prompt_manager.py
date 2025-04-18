@@ -165,7 +165,7 @@ class PromptManager:
         return None
 
     @staticmethod
-    def format_template(template_name: str, language: str = "python", **kwargs) -> str:
+    def format_template(template_name: str, language: str , **kwargs) -> str:
         """
         Format a template with the provided variables.
 
@@ -182,11 +182,11 @@ class PromptManager:
         """
         template = PromptManager.get_template(template_name, language)
         if not template:
-            raise ValueError(
-                f"Template '{template_name}' not found for language '{language}'"
-            )
+            raise ValueError(f"Template '{template_name}' not found for language '{language}'")
 
-        return template.format(**kwargs)
+        # Include language in the formatting kwargs
+        format_kwargs = {"language": language, **kwargs}
+        return template.format(**format_kwargs)
 
     @staticmethod
     def add_custom_template(

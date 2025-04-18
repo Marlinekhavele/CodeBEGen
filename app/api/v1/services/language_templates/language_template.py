@@ -166,7 +166,13 @@ class LanguageTemplate(ABC):
         return set(
             value for value in self.get_component_map().values() if value is not None
         )
-
+    
+    def extract_entity_from_prompt(self, prompt: str) -> str:
+        """
+        Extract an entity name from a natural language prompt.
+        Should be implemented by each language template.
+        """
+        pass
 
 class LanguageTemplateFactory:
     """

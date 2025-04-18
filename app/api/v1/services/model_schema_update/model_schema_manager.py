@@ -143,7 +143,7 @@ class ModelSchemaManager:
                 language,
                 language_template,
             )
-
+            logger.debug(f"Schema update results: {schema_results}")
             # Add schema files to commit list if updated
             if schema_results.get("schema_updated", False):
                 for schema_result in schema_results.get("schema_results", []):
@@ -401,12 +401,12 @@ class ModelSchemaManager:
             project_analysis = await ProjectAnalysisService.analyze_project(
                 project_id, language=language
             )
-
+            schemas_entries = project_analysis.get("schemas", [])
+            logger.debug(f"Found {len(schemas_entries)} schemas in project analysis")
             # Find schemas related to the entity
             schema_files, schema_types = ModelSchemaManager._find_related_schemas(
                 project_analysis, entity_name, language
             )
-
             if not schema_files:
                 logger.warning(f"No schemas found for {entity_name}")
                 return {"schema_updated": False, "reason": "No schemas found"}
@@ -637,10 +637,12 @@ class ModelSchemaManager:
                 {endpoint_code}
                 ```
                 """
+                
+            # Use PromptManager to get and format the template
             # Get the appropriate template name based on language
             template_name = "model_changes"
-
-            # Format the prompt with user's request and existing model
+            
+            # Format the template using PromptManager - avoid passing language twice
             formatted_prompt = PromptManager.format_template(
                 template_name=template_name,
                 language=language,
@@ -662,9 +664,7 @@ class ModelSchemaManager:
 
             try:
                 changes = json.loads(changes_text)
-                logger.info(
-                    f"Parsed {len(changes)} change operations for {entity_name}"
-                )
+                logger.info(f"Parsed {len(changes)} change operations for {entity_name}")
 
                 # Validate the changes
                 validated_changes = []

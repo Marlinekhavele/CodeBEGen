@@ -73,7 +73,9 @@ class JavaScriptTemplate(LanguageTemplate):
                 return True
         return False
 
-    def get_component_paths(self, project_id: str, entity_name: str, **kwargs) -> Dict[str, str]:
+    def get_component_paths(
+        self, project_id: str, entity_name: str, **kwargs
+    ) -> Dict[str, str]:
         """
         Get file paths for JavaScript components.
 
@@ -90,7 +92,7 @@ class JavaScriptTemplate(LanguageTemplate):
         # For controllers/endpoints, use the endpoint path and method from kwargs if available
         endpoint_path = kwargs.get("endpoint_path", "")
         method = kwargs.get("method", "").lower()
-        
+
         if endpoint_path and method:
             # Extract the last segment of the path for the filename
             path_segments = endpoint_path.strip("/").split("/")
@@ -99,7 +101,6 @@ class JavaScriptTemplate(LanguageTemplate):
         else:
             # Fallback to entity-based naming
             controller_file = f"controllers/{kebab_case_entity}.controller.js"
-
 
         return {
             "controller": controller_file,
@@ -248,9 +249,9 @@ class JavaScriptTemplate(LanguageTemplate):
             )
 
             # Add language-specific metadata
-            result["file_path"] = self.get_component_paths(project_id, entity_name, **kwargs)[
-                component_type
-            ]
+            result["file_path"] = self.get_component_paths(
+                project_id, entity_name, **kwargs
+            )[component_type]
             result["entity_name"] = entity_name
 
             if "method" in kwargs:

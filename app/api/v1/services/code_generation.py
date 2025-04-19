@@ -180,7 +180,7 @@ class CodeGenerationService:
             # Update file path with correct entity name
             component_type = language_template.get_component_map().get("endpoint")
             primary_component["file_path"] = language_template.get_component_paths(
-                project_id, entity_name
+                project_id, entity_name, method=method, endpoint_path=endpoint_path
             )[component_type]
 
             # Step 4: Initialize result dictionary

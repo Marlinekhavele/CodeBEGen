@@ -1,15 +1,22 @@
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status, Depends
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
+from sqlalchemy.orm import Session
 
+from app.api.db.database import get_db
 from app.api.v1.schemas.code_generation import (
     CodeGenerationRequest,
     CodeGenerationResponse,
 )
 from app.api.v1.services.code_generation import CodeGenerationService
-from sqlalchemy.orm import Session
-from app.api.db.database import get_db
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

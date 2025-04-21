@@ -1,16 +1,18 @@
 import json
+
 import pytest
-from unittest import mock
 import responses
-from fastapi.testclient import TestClient
 from fastapi.responses import JSONResponse
-from app.api.v1.services.project_helpers import GetAllHelpers  
-from app.api.v1.routes.project_helpers import list_helpers  
+from fastapi.testclient import TestClient
+
+from app.api.v1.routes.project_helpers import list_helpers
+from app.api.v1.services.project_helpers import GetAllHelpers
 from config import settings
 from main import app
 
 # Create test client
 client = TestClient(app)
+
 
 class TestGetAllHelpers:
 
@@ -19,7 +21,9 @@ class TestGetAllHelpers:
     async def test_get_all_helpers_success(self):
         # Mocking the API response for the repository contents
         project_id = "test-project"
-        repo_url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/helpers"
+        repo_url = (
+            f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/helpers"
+        )
 
         helpers_data = [
             {
@@ -28,7 +32,7 @@ class TestGetAllHelpers:
                 "type": "file",
                 "url": f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/helpers/data_helper.py",
                 "html_url": f"https://example.com/{project_id}/helpers/data_helper.py",
-                "size": 1000
+                "size": 1000,
             },
             {
                 "name": "deployment_helper.sh",
@@ -36,7 +40,7 @@ class TestGetAllHelpers:
                 "type": "file",
                 "url": f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/helpers/deployment_helper.sh",
                 "html_url": f"https://example.com/{project_id}/helpers/deployment_helper.sh",
-                "size": 2000
+                "size": 2000,
             },
             {
                 "name": "__init__.py",  # Should be filtered out
@@ -44,16 +48,11 @@ class TestGetAllHelpers:
                 "type": "file",
                 "url": f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/helpers/__init__.py",
                 "html_url": f"https://example.com/{project_id}/helpers/__init__.py",
-                "size": 100
-            }
+                "size": 100,
+            },
         ]
 
-        responses.add(
-            responses.GET,
-            repo_url,
-            json=helpers_data,
-            status=200
-        )
+        responses.add(responses.GET, repo_url, json=helpers_data, status=200)
 
         # Mock individual file responses
         for helper in helpers_data:
@@ -62,7 +61,7 @@ class TestGetAllHelpers:
                     responses.GET,
                     helper["url"],
                     json={"content": "dummy content"},
-                    status=200
+                    status=200,
                 )
 
         result = await GetAllHelpers.get_all_helpers_from_repo(project_id)
@@ -78,13 +77,12 @@ class TestGetAllHelpers:
     async def test_get_all_helpers_404(self):
         # Test when helpers directory doesn't exist
         project_id = "nonexistent-project"
-        repo_url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/helpers"
+        repo_url = (
+            f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/helpers"
+        )
 
         responses.add(
-            responses.GET,
-            repo_url,
-            json={"message": "Not Found"},
-            status=404
+            responses.GET, repo_url, json={"message": "Not Found"}, status=404
         )
 
         result = await GetAllHelpers.get_all_helpers_from_repo(project_id)
@@ -99,13 +97,15 @@ class TestGetAllHelpers:
     @responses.activate
     async def test_get_all_helpers_server_error(self):
         project_id = "error-project"
-        repo_url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/helpers"
+        repo_url = (
+            f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/helpers"
+        )
 
         responses.add(
             responses.GET,
             repo_url,
             json={"message": "Internal Server Error"},
-            status=500
+            status=500,
         )
 
         result = await GetAllHelpers.get_all_helpers_from_repo(project_id)
@@ -128,15 +128,15 @@ class TestHelperRoutes:
                 "path": "helpers/data_helper.py",
                 "url": "https://example.com/data_helper.py",
                 "size": 1000,
-                "type": "python"
+                "type": "python",
             },
             {
                 "name": "deployment_helper",
                 "path": "helpers/deployment_helper.sh",
                 "url": "https://example.com/deployment_helper.sh",
                 "size": 2000,
-                "type": "shell"
-            }
+                "type": "shell",
+            },
         ]
         mock_get_all_helpers.return_value = helpers
 

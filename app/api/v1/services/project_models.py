@@ -1,5 +1,6 @@
 import base64
 import logging
+
 import requests
 from fastapi import status
 
@@ -26,7 +27,9 @@ class GetAllModels:
             Exception: For any other errors
         """
         try:
-            repo_model_url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/models"
+            repo_model_url = (
+                f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/models"
+            )
 
             response = requests.get(repo_model_url)
 
@@ -34,14 +37,14 @@ class GetAllModels:
                 return error_response(
                     status_code=status.HTTP_404_NOT_FOUND,
                     message=f"Models directory not found in project {project_id}",
-                    detail="The models directory does not exist in this repository"
+                    detail="The models directory does not exist in this repository",
                 )
 
             if response.status_code != 200:
                 return error_response(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     message="Failed to fetch models",
-                    detail=response.text
+                    detail=response.text,
                 )
 
             # Parse the response
@@ -50,21 +53,25 @@ class GetAllModels:
             # Filter for model files (excluding __init__.py and other package files)
             models = []
             for item in contents:
-                if (item["type"] == "file" and
-                        item["name"].endswith(".py") and
-                        item["name"] != "__init__.py" and
-                        not item["name"].startswith("_") and
-                        "__pycache__" not in item["path"]):
+                if (
+                    item["type"] == "file"
+                    and item["name"].endswith(".py")
+                    and item["name"] != "__init__.py"
+                    and not item["name"].startswith("_")
+                    and "__pycache__" not in item["path"]
+                ):
 
                     # Check if we can access the file (validates it exists and we have permissions)
                     file_response = requests.get(item["url"])
                     if file_response.status_code == 200:
-                        models.append({
-                            "name": item["name"].replace(".py", ""),
-                            "path": item["path"],
-                            "url": item["html_url"],
-                            "size": item["size"]
-                        })
+                        models.append(
+                            {
+                                "name": item["name"].replace(".py", ""),
+                                "path": item["path"],
+                                "url": item["html_url"],
+                                "size": item["size"],
+                            }
+                        )
 
             return models
 
@@ -75,9 +82,11 @@ class GetAllModels:
             logger.error(f"Error retrieving models: {str(e)}")
             raise
 
-
     @staticmethod
-    async def get_model_content_from_repo(project_id: str, model_name: str,):
+    async def get_model_content_from_repo(
+        project_id: str,
+        model_name: str,
+    ):
         """
         Retrieves the content of a specific model from a project repository
 
@@ -107,14 +116,14 @@ class GetAllModels:
                 return error_response(
                     status_code=status.HTTP_404_NOT_FOUND,
                     message=f"Model {model_name} not found in project {project_id}",
-                    detail="The specified model does not exist in this repository"
+                    detail="The specified model does not exist in this repository",
                 )
 
             if response.status_code != 200:
                 return error_response(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     message="Failed to fetch model content",
-                    detail=response.text
+                    detail=response.text,
                 )
 
             # Parse the response
@@ -136,7 +145,7 @@ class GetAllModels:
                 "name": model_name,
                 "format": "text",
                 "content": text_content,
-                "content_base64": content_base64
+                "content_base64": content_base64,
             }
 
         except Exception as e:
@@ -144,5 +153,5 @@ class GetAllModels:
             return error_response(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 message="Error retrieving model content",
-                detail=str(e)
+                detail=str(e),
             )

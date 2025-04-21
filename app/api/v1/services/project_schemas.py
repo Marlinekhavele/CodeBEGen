@@ -1,11 +1,14 @@
 import base64
 import logging
+
 import requests
 from fastapi import status
+
 from app.api.v1.utils.error_response import error_response
 from config import settings
 
 logger = logging.getLogger(__name__)
+
 
 class GetAllSchemas:
     @staticmethod
@@ -29,34 +32,40 @@ class GetAllSchemas:
                 return error_response(
                     status_code=status.HTTP_404_NOT_FOUND,
                     message=f"Schemas directory not found in project {project_id}",
-                    detail="The schemas directory does not exist in this repository"
+                    detail="The schemas directory does not exist in this repository",
                 )
 
             if response.status_code != 200:
                 return error_response(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     message="Failed to fetch schemas",
-                    detail=response.text
+                    detail=response.text,
                 )
 
             contents = response.json()
 
             schemas = []
             for item in contents:
-                if (item["type"] == "file" and
-                        item["name"].endswith(".py") and  # Look for .py files
-                        item["name"] != "__init__.py" and
-                        not item["name"].startswith("_") and
-                        "__pycache__" not in item["path"]):
+                if (
+                    item["type"] == "file"
+                    and item["name"].endswith(".py")  # Look for .py files
+                    and item["name"] != "__init__.py"
+                    and not item["name"].startswith("_")
+                    and "__pycache__" not in item["path"]
+                ):
 
                     file_response = requests.get(item["url"])
                     if file_response.status_code == 200:
-                        schemas.append({
-                            "name": item["name"].replace(".py", ""), # Remove .py extension
-                            "path": item["path"],
-                            "url": item["html_url"],
-                            "size": item["size"]
-                        })
+                        schemas.append(
+                            {
+                                "name": item["name"].replace(
+                                    ".py", ""
+                                ),  # Remove .py extension
+                                "path": item["path"],
+                                "url": item["html_url"],
+                                "size": item["size"],
+                            }
+                        )
 
             return schemas
 
@@ -66,8 +75,8 @@ class GetAllSchemas:
         except Exception as e:
             logger.error(f"Error retrieving schemas: {str(e)}")
             raise
-        
-    @staticmethod   
+
+    @staticmethod
     async def get_schema_content_from_repo(project_id: str, schema_name: str):
         """
         Retrieves the content of a specific schema from a project repository
@@ -95,14 +104,14 @@ class GetAllSchemas:
                 return error_response(
                     status_code=status.HTTP_404_NOT_FOUND,
                     message=f"Schema {schema_name} not found in project {project_id}",
-                    detail="The specified schema does not exist in this repository"
+                    detail="The specified schema does not exist in this repository",
                 )
 
             if response.status_code != 200:
                 return error_response(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     message="Failed to fetch schema content",
-                    detail=response.text
+                    detail=response.text,
                 )
 
             # Parse the response
@@ -124,7 +133,7 @@ class GetAllSchemas:
                 "name": schema_name,
                 "format": "text",
                 "content": text_content,
-                "content_base64": content_base64
+                "content_base64": content_base64,
             }
 
         except Exception as e:
@@ -132,6 +141,5 @@ class GetAllSchemas:
             return error_response(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 message="Error retrieving schema content",
-                detail=str(e)
+                detail=str(e),
             )
-

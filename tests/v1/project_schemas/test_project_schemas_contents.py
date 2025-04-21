@@ -1,11 +1,10 @@
 import base64
-import json
+
 import pytest
-from unittest import mock
 import responses
-from fastapi.testclient import TestClient
 from fastapi.responses import JSONResponse
-from app.api.v1.routes.project_schemas import get_schema_content
+from fastapi.testclient import TestClient
+
 from app.api.v1.services.project_schemas import GetAllSchemas
 from config import settings
 from main import app
@@ -36,17 +35,14 @@ class TestGetSchemaContent:
             "encoding": "base64",
             "url": repo_api_url,
             "html_url": f"https://example.com/{project_id}/schemas/{schema_file}",
-            "size": len(schema_content)
+            "size": len(schema_content),
         }
 
-        responses.add(
-            responses.GET,
-            repo_api_url,
-            json=response_data,
-            status=200
-        )
+        responses.add(responses.GET, repo_api_url, json=response_data, status=200)
 
-        result = await GetAllSchemas.get_schema_content_from_repo(project_id, schema_name)
+        result = await GetAllSchemas.get_schema_content_from_repo(
+            project_id, schema_name
+        )
 
         assert isinstance(result, dict)
         assert result["name"] == schema_name
@@ -59,7 +55,7 @@ class TestGetSchemaContent:
     async def test_get_schema_content_with_extension(self):
         project_id = "test-project"
         schema_name = "test_schema.py"
-        expected_schema_name = "test_schema"  
+        expected_schema_name = "test_schema"
 
         schema_content = "def another_test():\n    pass"
         encoded_content = base64.b64encode(schema_content.encode()).decode()
@@ -73,17 +69,14 @@ class TestGetSchemaContent:
             "encoding": "base64",
             "url": repo_api_url,
             "html_url": f"https://example.com/{project_id}/schemas/{schema_name}",
-            "size": len(schema_content)
+            "size": len(schema_content),
         }
 
-        responses.add(
-            responses.GET,
-            repo_api_url,
-            json=response_data,
-            status=200
-        )
+        responses.add(responses.GET, repo_api_url, json=response_data, status=200)
 
-        result = await GetAllSchemas.get_schema_content_from_repo(project_id, schema_name)
+        result = await GetAllSchemas.get_schema_content_from_repo(
+            project_id, schema_name
+        )
 
         assert result["name"] == expected_schema_name
         assert result["content"] == schema_content
@@ -98,13 +91,12 @@ class TestGetSchemaContent:
         repo_api_url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/schemas/{schema_name}.py"
 
         responses.add(
-            responses.GET,
-            repo_api_url,
-            json={"message": "Not Found"},
-            status=404
+            responses.GET, repo_api_url, json={"message": "Not Found"}, status=404
         )
 
-        result = await GetAllSchemas.get_schema_content_from_repo(project_id, schema_name)
+        result = await GetAllSchemas.get_schema_content_from_repo(
+            project_id, schema_name
+        )
 
         assert isinstance(result, JSONResponse)
         assert result.status_code == 404
@@ -123,10 +115,12 @@ class TestGetSchemaContent:
             responses.GET,
             repo_api_url,
             json={"message": "Internal Server Error"},
-            status=500
+            status=500,
         )
 
-        result = await GetAllSchemas.get_schema_content_from_repo(project_id, schema_name)
+        result = await GetAllSchemas.get_schema_content_from_repo(
+            project_id, schema_name
+        )
 
         assert isinstance(result, JSONResponse)
         assert result.status_code == 500

@@ -1,10 +1,12 @@
 import base64
 import json
-import pytest
 from unittest import mock
+
+import pytest
 import responses
-from fastapi.testclient import TestClient
 from fastapi.responses import JSONResponse
+from fastapi.testclient import TestClient
+
 from app.api.v1.routes.project_models import get_model_content
 from app.api.v1.services.project_models import GetAllModels
 from config import settings
@@ -39,15 +41,10 @@ class TestGetModelContent:
             "encoding": "base64",
             "url": repo_api_url,
             "html_url": f"https://example.com/{project_id}/models/{model_file}",
-            "size": len(model_content)
+            "size": len(model_content),
         }
 
-        responses.add(
-            responses.GET,
-            repo_api_url,
-            json=response_data,
-            status=200
-        )
+        responses.add(responses.GET, repo_api_url, json=response_data, status=200)
 
         result = await GetAllModels.get_model_content_from_repo(project_id, model_name)
 
@@ -77,15 +74,10 @@ class TestGetModelContent:
             "encoding": "base64",
             "url": repo_api_url,
             "html_url": f"https://example.com/{project_id}/models/{model_name}",
-            "size": len(model_content)
+            "size": len(model_content),
         }
 
-        responses.add(
-            responses.GET,
-            repo_api_url,
-            json=response_data,
-            status=200
-        )
+        responses.add(responses.GET, repo_api_url, json=response_data, status=200)
 
         result = await GetAllModels.get_model_content_from_repo(project_id, model_name)
 
@@ -102,10 +94,7 @@ class TestGetModelContent:
         repo_api_url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/models/{model_name}.py"
 
         responses.add(
-            responses.GET,
-            repo_api_url,
-            json={"message": "Not Found"},
-            status=404
+            responses.GET, repo_api_url, json={"message": "Not Found"}, status=404
         )
 
         result = await GetAllModels.get_model_content_from_repo(project_id, model_name)
@@ -128,7 +117,7 @@ class TestGetModelContent:
             responses.GET,
             repo_api_url,
             json={"message": "Internal Server Error"},
-            status=500
+            status=500,
         )
 
         result = await GetAllModels.get_model_content_from_repo(project_id, model_name)
@@ -149,12 +138,13 @@ class TestModelContentEndpoint:
             "name": "test_model",
             "format": "text",
             "content": "def test_function():\n    return 'Hello, world!'",
-            "content_base64": "ZGVmIHRlc3RfZnVuY3Rpb24oKToKICAgIHJldHVybiAnSGVsbG8sIHdvcmxkISc="
+            "content_base64": "ZGVmIHRlc3RfZnVuY3Rpb24oKToKICAgIHJldHVybiAnSGVsbG8sIHdvcmxkISc=",
         }
 
         # Mock the service method
         with mock.patch(
-                "app.api.v1.services.project_models.GetAllModels.get_model_content_from_repo") as mock_get_content:
+            "app.api.v1.services.project_models.GetAllModels.get_model_content_from_repo"
+        ) as mock_get_content:
             mock_get_content.return_value = model_content
 
             response = await get_model_content("test-project", "test_model")
@@ -177,13 +167,14 @@ class TestModelContentEndpoint:
             content={
                 "status_code": 404,
                 "message": "Model test_model not found in project test-project",
-                "detail": "The specified model does not exist in this repository"
-            }
+                "detail": "The specified model does not exist in this repository",
+            },
         )
 
         # Mock the service method to return an error response
         with mock.patch(
-                "app.api.v1.services.project_models.GetAllModels.get_model_content_from_repo") as mock_get_content:
+            "app.api.v1.services.project_models.GetAllModels.get_model_content_from_repo"
+        ) as mock_get_content:
             mock_get_content.return_value = error_response
 
             response = await get_model_content("test-project", "test_model")
@@ -195,7 +186,8 @@ class TestModelContentEndpoint:
     async def test_get_model_content_exception(self):
         # Mock the service method to raise an exception
         with mock.patch(
-                "app.api.v1.services.project_models.GetAllModels.get_model_content_from_repo") as mock_get_content:
+            "app.api.v1.services.project_models.GetAllModels.get_model_content_from_repo"
+        ) as mock_get_content:
             mock_get_content.side_effect = Exception("Unexpected error")
 
             response = await get_model_content("test-project", "test_model")
@@ -215,11 +207,13 @@ def test_get_model_content_endpoint_with_client():
         "name": "test_model",
         "format": "text",
         "content": "def test_function():\n    return 'Hello, world!'",
-        "content_base64": "ZGVmIHRlc3RfZnVuY3Rpb24oKToKICAgIHJldHVybiAnSGVsbG8sIHdvcmxkISc="
+        "content_base64": "ZGVmIHRlc3RfZnVuY3Rpb24oKToKICAgIHJldHVybiAnSGVsbG8sIHdvcmxkISc=",
     }
 
     # Mock the service method
-    with mock.patch("app.api.v1.services.project_models.GetAllModels.get_model_content_from_repo") as mock_get_content:
+    with mock.patch(
+        "app.api.v1.services.project_models.GetAllModels.get_model_content_from_repo"
+    ) as mock_get_content:
         mock_get_content.return_value = model_content
 
         response = client.get("/api/v1/projects/test-project/models/test_model/content")

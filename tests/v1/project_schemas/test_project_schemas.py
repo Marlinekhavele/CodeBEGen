@@ -1,15 +1,17 @@
 import json
+
 import pytest
-from unittest import mock
 import responses
-from fastapi.testclient import TestClient
 from fastapi.responses import JSONResponse
-from app.api.v1.services.project_schemas import GetAllSchemas  
-from app.api.v1.routes.project_schemas import list_schemas  
+from fastapi.testclient import TestClient
+
+from app.api.v1.routes.project_schemas import list_schemas
+from app.api.v1.services.project_schemas import GetAllSchemas
 from config import settings
 from main import app
 
 client = TestClient(app)
+
 
 class TestGetAllSchemas:
 
@@ -17,41 +19,38 @@ class TestGetAllSchemas:
     @responses.activate
     async def test_get_all_schemas_success(self):
         project_id = "test-project"
-        repo_url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/schemas"
+        repo_url = (
+            f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/schemas"
+        )
 
         schemas_data = [
             {
-                "name": "schema1.py", 
-                "path": "schemas/schema1.py", 
+                "name": "schema1.py",
+                "path": "schemas/schema1.py",
                 "type": "file",
                 "url": f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/schemas/schema1.py",
                 "html_url": f"https://example.com/{project_id}/schemas/schema1.py",
-                "size": 1000
+                "size": 1000,
             },
             {
-                "name": "schema2.py",  
+                "name": "schema2.py",
                 "path": "schemas/schema2.py",
                 "type": "file",
-                "url": f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/schemas/schema2.py", # Changed to .py
+                "url": f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/schemas/schema2.py",  # Changed to .py
                 "html_url": f"https://example.com/{project_id}/schemas/schema2.py",
-                "size": 2000
+                "size": 2000,
             },
             {
-                "name": "__init__.py", 
+                "name": "__init__.py",
                 "path": "schemas/__init__.py",
                 "type": "file",
                 "url": f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/schemas/__init__.py",
                 "html_url": f"https://example.com/{project_id}/schemas/__init__.py",
-                "size": 100
-            }
+                "size": 100,
+            },
         ]
 
-        responses.add(
-            responses.GET,
-            repo_url,
-            json=schemas_data,
-            status=200
-        )
+        responses.add(responses.GET, repo_url, json=schemas_data, status=200)
 
         # Mock individual file responses
         for schema in schemas_data:
@@ -60,7 +59,7 @@ class TestGetAllSchemas:
                     responses.GET,
                     schema["url"],
                     json={"content": "dummy content"},
-                    status=200
+                    status=200,
                 )
 
         result = await GetAllSchemas.get_all_schemas_from_repo(project_id)
@@ -74,13 +73,12 @@ class TestGetAllSchemas:
     async def test_get_all_schemas_404(self):
         # Test when schemas directory doesn't exist
         project_id = "nonexistent-project"
-        repo_url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/schemas"
+        repo_url = (
+            f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/schemas"
+        )
 
         responses.add(
-            responses.GET,
-            repo_url,
-            json={"message": "Not Found"},
-            status=404
+            responses.GET, repo_url, json={"message": "Not Found"}, status=404
         )
 
         result = await GetAllSchemas.get_all_schemas_from_repo(project_id)
@@ -95,13 +93,15 @@ class TestGetAllSchemas:
     @responses.activate
     async def test_get_all_schemas_server_error(self):
         project_id = "error-project"
-        repo_url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/schemas"
+        repo_url = (
+            f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/schemas"
+        )
 
         responses.add(
             responses.GET,
             repo_url,
             json={"message": "Internal Server Error"},
-            status=500
+            status=500,
         )
 
         result = await GetAllSchemas.get_all_schemas_from_repo(project_id)
@@ -123,14 +123,14 @@ class TestSchemaRoutes:
                 "name": "schema1",
                 "path": "schemas/schema1.json",
                 "url": "https://example.com/schema1.json",
-                "size": 1000
+                "size": 1000,
             },
             {
                 "name": "schema2",
                 "path": "schemas/schema2.json",
                 "url": "https://example.com/schema2.json",
-                "size": 2000
-            }
+                "size": 2000,
+            },
         ]
         mock_get_all_schemas.return_value = schemas
 
@@ -170,4 +170,3 @@ class TestSchemaRoutes:
         content = json.loads(response.body.decode())
         assert content["message"] == "Error retrieving schemas"
         assert "Unexpected error" in content["detail"]
-

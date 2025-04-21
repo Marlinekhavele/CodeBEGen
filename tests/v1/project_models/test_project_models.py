@@ -1,16 +1,12 @@
 import json
 
 import pytest
-from unittest import mock
-
-
 import responses
-
-from fastapi.testclient import TestClient
 from fastapi.responses import JSONResponse
+from fastapi.testclient import TestClient
 
-from app.api.v1.services.project_models import GetAllModels
 from app.api.v1.routes.project_models import list_models
+from app.api.v1.services.project_models import GetAllModels
 from config import settings
 from main import app
 
@@ -26,7 +22,9 @@ class TestGetAllModels:
     async def test_get_all_models_success(self):
         # Mocking the API response for the repository contents
         project_id = "test-project"
-        repo_url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/models"
+        repo_url = (
+            f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/models"
+        )
 
         models_data = [
             {
@@ -35,7 +33,7 @@ class TestGetAllModels:
                 "type": "file",
                 "url": f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/models/model1.py",
                 "html_url": f"https://example.com/{project_id}/models/model1.py",
-                "size": 1000
+                "size": 1000,
             },
             {
                 "name": "model2.py",
@@ -43,7 +41,7 @@ class TestGetAllModels:
                 "type": "file",
                 "url": f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/models/model2.py",
                 "html_url": f"https://example.com/{project_id}/models/model2.py",
-                "size": 2000
+                "size": 2000,
             },
             {
                 "name": "__init__.py",  # Should be filtered out
@@ -51,16 +49,11 @@ class TestGetAllModels:
                 "type": "file",
                 "url": f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/models/__init__.py",
                 "html_url": f"https://example.com/{project_id}/models/__init__.py",
-                "size": 100
-            }
+                "size": 100,
+            },
         ]
 
-        responses.add(
-            responses.GET,
-            repo_url,
-            json=models_data,
-            status=200
-        )
+        responses.add(responses.GET, repo_url, json=models_data, status=200)
 
         # Mock individual file responses
         for model in models_data:
@@ -69,7 +62,7 @@ class TestGetAllModels:
                     responses.GET,
                     model["url"],
                     json={"content": "dummy content"},
-                    status=200
+                    status=200,
                 )
 
         result = await GetAllModels.get_all_models_from_repo(project_id)
@@ -83,13 +76,12 @@ class TestGetAllModels:
     async def test_get_all_models_404(self):
         # Test when models directory doesn't exist
         project_id = "nonexistent-project"
-        repo_url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/models"
+        repo_url = (
+            f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/models"
+        )
 
         responses.add(
-            responses.GET,
-            repo_url,
-            json={"message": "Not Found"},
-            status=404
+            responses.GET, repo_url, json={"message": "Not Found"}, status=404
         )
 
         result = await GetAllModels.get_all_models_from_repo(project_id)
@@ -105,13 +97,15 @@ class TestGetAllModels:
     async def test_get_all_models_server_error(self):
         # Test server error response
         project_id = "error-project"
-        repo_url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/models"
+        repo_url = (
+            f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/models"
+        )
 
         responses.add(
             responses.GET,
             repo_url,
             json={"message": "Internal Server Error"},
-            status=500
+            status=500,
         )
 
         result = await GetAllModels.get_all_models_from_repo(project_id)
@@ -134,14 +128,14 @@ class TestModelRoutes:
                 "name": "model1",
                 "path": "models/model1.py",
                 "url": "https://example.com/model1.py",
-                "size": 1000
+                "size": 1000,
             },
             {
                 "name": "model2",
                 "path": "models/model2.py",
                 "url": "https://example.com/model2.py",
-                "size": 2000
-            }
+                "size": 2000,
+            },
         ]
         mock_get_all_models.return_value = models
 
@@ -191,14 +185,14 @@ def test_list_models_endpoint_with_client(mock_get_all_models):
             "name": "model1",
             "path": "models/model1.py",
             "url": "https://example.com/model1.py",
-            "size": 1000
+            "size": 1000,
         },
         {
             "name": "model2",
             "path": "models/model2.py",
             "url": "https://example.com/model2.py",
-            "size": 2000
-        }
+            "size": 2000,
+        },
     ]
     mock_get_all_models.return_value = models
 

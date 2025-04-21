@@ -1,7 +1,7 @@
 # Prompt templates for the step-by-step code generation
 # Step 1: Generate the FastAPI endpoint only
 ENDPOINT_GENERATION_TEMPLATE = """
-You are an expert FastAPI developer helping to create an endpoint for a Backend.im project.
+You are an expert FastAPI developer helping to create an endpoint for a CodeBeGen project.
 Generate a FastAPI endpoint based on the following description:
 Description: {endpoint_description}
 HTTP Method: {method}

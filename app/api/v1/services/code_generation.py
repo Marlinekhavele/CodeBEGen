@@ -1,6 +1,12 @@
 import logging
 from typing import Any, Awaitable, Callable, Dict, Optional
 
+from fastapi import Depends
+from sqlalchemy.orm import Session
+
+from app.api.db.database import get_db
+from app.api.v1.models.endpoints import EndPoint
+from app.api.v1.models.projects import Project
 from app.api.v1.schemas.code_generation import (
     CodeGenerationRequest,
     CodeGenerationResponse,
@@ -122,7 +128,7 @@ class CodeGenerationService:
                 self.on_component_complete[component] = callback
 
     async def generate_code(
-        self, request: CodeGenerationRequest
+        self, request: CodeGenerationRequest, db: Session = Depends(get_db)
     ) -> CodeGenerationResponse:
         """
         Generate code based on the request, determining needed components for the specific language.
@@ -142,7 +148,13 @@ class CodeGenerationService:
             endpoint_path = (
                 request.endpoint_path or f"/api/{prompt.lower().replace(' ', '-')}"
             )
-
+            # Check for project existence in the database
+            project = None
+            project = db.query(Project).filter(Project.slug == project_id).first()
+            if not project:
+                logger.info(
+                    f"Project with slug {project_id} not found in DB. Proceeding without DB storage."
+                )
             # Initialize language template
             language_template = LanguageTemplateFactory.get_template(language)
 
@@ -230,8 +242,12 @@ class CodeGenerationService:
                 project_id, result, language, language_template
             )
             result["git_results"] = git_results
-
-            # Step 7: Create and return response
+            # Step 7: Save endpoint to database if project exists
+            if project:
+                await self._save_endpoint_to_db(
+                    db, project, result, git_results, request
+                )
+            # Step 8: Create and return response
             await self._notify_info("Code generation completed successfully")
             return CodeGenerationResponse(
                 success=True,
@@ -245,6 +261,77 @@ class CodeGenerationService:
             await self._notify_info(error_msg)
 
             return CodeGenerationResponse(success=False, message=error_msg, result=None)
+
+    async def _save_endpoint_to_db(
+        self,
+        db_session: Session,
+        project: Project,
+        result: Dict,
+        git_results: Dict,
+        request: CodeGenerationRequest,
+    ):
+        """
+        Save the generated endpoint information to the database.
+
+        Args:
+            db_session: Database session
+            project: Project instance
+            result: Dictionary containing generation results
+            git_results: Dictionary containing Git commit results
+            request: Original code generation request
+
+        Returns:
+            None
+        """
+        try:
+            if "endpoint" not in result:
+                logger.warning(
+                    "No endpoint information found in result, skipping DB storage"
+                )
+                return
+
+            endpoint_data = result["endpoint"]
+            endpoint_path = endpoint_data.get("endpoint_path") or endpoint_data.get(
+                "path", ""
+            )
+            endpoint_method = endpoint_data.get("method", "GET")
+
+            # Check if endpoint already exists
+            existing_endpoint = (
+                db_session.query(EndPoint)
+                .filter(
+                    EndPoint.project_id == project.id,
+                    EndPoint.path == endpoint_path,
+                    EndPoint.method == endpoint_method,
+                )
+                .first()
+            )
+
+            if not existing_endpoint:
+                # Create new endpoint
+                description = request.prompt
+                file_hash = git_results.get("endpoint", "")
+
+                new_endpoint = EndPoint(
+                    path=endpoint_path,
+                    method=endpoint_method,
+                    project_id=str(project.id),
+                    description=description,
+                    file_hash=file_hash,
+                )
+
+                db_session.add(new_endpoint)
+                db_session.commit()
+                db_session.refresh(new_endpoint)
+                logger.info(f"Created new endpoint in DB with ID: {new_endpoint.id}")
+            else:
+                logger.info(
+                    f"Endpoint already exists in DB with ID: {existing_endpoint.id}"
+                )
+
+        except Exception as e:
+            logger.error(f"Error saving endpoint to database: {str(e)}", exc_info=True)
+            # Continue without failing the overall process
 
     async def _generate_primary_component(
         self,

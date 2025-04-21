@@ -1,8 +1,17 @@
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
+from sqlalchemy.orm import Session
 
+from app.api.db.database import get_db
 from app.api.v1.schemas.code_generation import (
     CodeGenerationRequest,
     CodeGenerationResponse,
@@ -46,7 +55,7 @@ async def generate_code(request: CodeGenerationRequest):
 
 
 @router.websocket("/generate/stream")
-async def generate_code_stream(websocket: WebSocket):
+async def generate_code_stream(websocket: WebSocket, db: Session = Depends(get_db)):
     """
     Streams real-time code generation updates over WebSocket.
 
@@ -129,7 +138,7 @@ async def generate_code_stream(websocket: WebSocket):
             on_info=on_info,
         )
 
-        response = await code_gen_service.generate_code(request)
+        response = await code_gen_service.generate_code(request, db)
 
         await websocket.send_json(
             {

@@ -68,9 +68,9 @@ class TestGetAllHelpers:
 
         assert len(result) == 2
         assert result[0]["name"] == "data_helper"
-        assert result[0]["type"] == "python"
+        assert result[0]["type"] == "py"
         assert result[1]["name"] == "deployment_helper"
-        assert result[1]["type"] == "shell"
+        assert result[1]["type"] == "sh"
 
     @pytest.mark.asyncio
     @responses.activate

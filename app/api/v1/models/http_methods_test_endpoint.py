@@ -1,8 +1,10 @@
-from pydantic import BaseModel, HttpUrl, Field, validator
-from typing import Optional, Dict, Any, List, Union
-from enum import Enum
-from datetime import datetime
 import uuid
+from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional, Union
+
+from pydantic import BaseModel, Field, HttpUrl, validator
+
 
 class AuthType(str, Enum):
     NONE = "none"
@@ -11,16 +13,19 @@ class AuthType(str, Enum):
     API_KEY = "api_key"
     OAUTH2 = "oauth2"
 
+
 class FormDataItem(BaseModel):
     key: str
     value: str
     disabled: bool = False
+
 
 class FileUpload(BaseModel):
     key: str
     filename: str
     content_type: str
     disabled: bool = False
+
 
 class Auth(BaseModel):
     type: AuthType
@@ -30,6 +35,7 @@ class Auth(BaseModel):
     key_name: Optional[str] = None
     key_value: Optional[str] = None
     add_to: Optional[str] = "header"  # header or query
+
 
 class TestRequestPayload(BaseModel):
     name: Optional[str] = None
@@ -47,13 +53,14 @@ class TestRequestPayload(BaseModel):
     contentType: Optional[str] = "application/json"
     save_request: Optional[bool] = False
     environment_id: Optional[str] = None
-    
-    @validator('httpMethod')
+
+    @validator("httpMethod")
     def validate_http_method(cls, v):
-        allowed_methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
+        allowed_methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
         if v.upper() not in allowed_methods:
             raise ValueError(f"HTTP method must be one of {allowed_methods}")
         return v.upper()
+
 
 class TestResponsePayload(BaseModel):
     request_id: str = Field(default_factory=lambda: str(uuid.uuid4()))

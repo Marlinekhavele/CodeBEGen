@@ -1,24 +1,23 @@
-from fastapi import APIRouter, HTTPException, status
-from app.api.v1.models.http_methods_test_endpoint import (
-    TestRequestPayload, TestResponsePayload, 
-    AuthType
-)
-import httpx
-import time
 import json
-from datetime import datetime
+import time
 import uuid
+from datetime import datetime
 
-from app.api.v1.utils.http_methods_test_endpoint_helpers import (
-    add_auth_to_request
+import httpx
+from fastapi import APIRouter, HTTPException, status
+
+from app.api.v1.models.http_methods_test_endpoint import (
+    AuthType,
+    TestRequestPayload,
+    TestResponsePayload,
 )
+from app.api.v1.utils.http_methods_test_endpoint_helpers import add_auth_to_request
 
 router = APIRouter(tags=["test-endpoint"])
 
+
 @router.post("/test-endpoint", response_model=TestResponsePayload)
-async def run_test_endpoint(
-    payload: TestRequestPayload
-):
+async def run_test_endpoint(payload: TestRequestPayload):
     """
     Test an API endpoint by sending an HTTP request to the specified URL.
 
@@ -74,7 +73,7 @@ async def run_test_endpoint(
            "follow_redirects": True
         }
 
-        
+
     POST Request:
     \n
         payload = {
@@ -114,42 +113,49 @@ async def run_test_endpoint(
             "timeout": 10
         }
     """
-    if payload.httpMethod in ["POST", "PUT", "PATCH"] and not any([payload.requestBody, payload.formData, payload.multipartData]):
+    if payload.httpMethod in ["POST", "PUT", "PATCH"] and not any(
+        [payload.requestBody, payload.formData, payload.multipartData]
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Request body, form data, or multipart data is required for POST, PUT, and PATCH requests."
+            detail="Request body, form data, or multipart data is required for POST, PUT, and PATCH requests.",
         )
 
-    if payload.httpMethod == "DELETE" and any([payload.requestBody, payload.formData, payload.multipartData]):
+    if payload.httpMethod == "DELETE" and any(
+        [payload.requestBody, payload.formData, payload.multipartData]
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="DELETE requests should not include a body."
+            detail="DELETE requests should not include a body.",
         )
-    
+
     request_id = str(uuid.uuid4())
-    
+
     try:
         request_kwargs = {
             "method": payload.httpMethod,
             "url": str(payload.endpointUrl),
             "timeout": payload.timeout,
-            "follow_redirects": payload.follow_redirects
+            "follow_redirects": payload.follow_redirects,
         }
-        
+
         if payload.headers:
             request_kwargs["headers"] = payload.headers
-        
-        if payload.contentType and not (payload.headers and "content-type" in [h.lower() for h in payload.headers.keys()]):
+
+        if payload.contentType and not (
+            payload.headers
+            and "content-type" in [h.lower() for h in payload.headers.keys()]
+        ):
             if "headers" not in request_kwargs:
                 request_kwargs["headers"] = {}
             request_kwargs["headers"]["Content-Type"] = payload.contentType
-        
+
         if payload.queryParams:
             request_kwargs["params"] = payload.queryParams
-        
+
         if payload.auth and payload.auth.type != AuthType.NONE:
             request_kwargs = add_auth_to_request(request_kwargs, payload.auth)
-        
+
         if payload.requestBody and payload.contentType == "application/json":
             if isinstance(payload.requestBody, str):
                 try:
@@ -157,35 +163,37 @@ async def run_test_endpoint(
                 except json.JSONDecodeError:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Invalid JSON string in requestBody"
+                        detail="Invalid JSON string in requestBody",
                     )
             request_kwargs["json"] = payload.requestBody
         elif payload.requestBody:
             request_kwargs["data"] = json.dumps(payload.requestBody)
         elif payload.formData:
-            form_data = {item.key: item.value for item in payload.formData if not item.disabled}
+            form_data = {
+                item.key: item.value for item in payload.formData if not item.disabled
+            }
             request_kwargs["data"] = form_data
         elif payload.multipartData:
             pass
-        
+
         start_time = time.time()
         async with httpx.AsyncClient() as client:
             response = await client.request(**request_kwargs)
         end_time = time.time()
-        
+
         try:
             response_body = response.json()
-        except:
+        except json.JSONDecodeError:
             response_body = response.text
 
         if payload.httpMethod in ["PUT", "DELETE"]:
             response_body = {
                 "message": f"{payload.httpMethod} request processed successfully.",
-                "data": response_body
+                "data": response_body,
             }
-        
+
         response_size = len(response.content)
-        
+
         response_data = TestResponsePayload(
             request_id=request_id,
             success=response.status_code < 400,
@@ -196,19 +204,21 @@ async def run_test_endpoint(
             size=response_size,
             contentType=response.headers.get("content-type"),
             cookies=dict(response.cookies),
-            redirects=[str(r.url) for r in response.history] if response.history else None,
-            timestamp=datetime.utcnow()
+            redirects=(
+                [str(r.url) for r in response.history] if response.history else None
+            ),
+            timestamp=datetime.utcnow(),
         )
-        
+
         return response_data
-    
+
     except httpx.RequestError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Request failed: {str(e)}"
+            detail=f"Request failed: {str(e)}",
         )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred: {str(e)}"
+            detail=f"An error occurred: {str(e)}",
         )

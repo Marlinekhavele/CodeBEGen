@@ -8,6 +8,7 @@ from app.api.v1.routes.project_models import router as get_project_models_router
 from app.api.v1.routes.project_schemas import router as get_project_schemas_router
 from app.api.v1.routes.projects import router as project_router
 from app.api.v1.routes.streaming import router as streaming_router
+from app.api.v1.routes.http_methods_test_endpoint import router as http_methods_test_endpoint_router
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(project_router)
@@ -18,3 +19,4 @@ router.include_router(get_all_endpoints_router)
 router.include_router(get_project_models_router)
 router.include_router(get_project_schemas_router)
 router.include_router(get_project_helpers_router)
+router.include_router(http_methods_test_endpoint_router)

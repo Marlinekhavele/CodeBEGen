@@ -12,7 +12,7 @@ from main import app
 TEST_BASE_URL = "http://test"
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def event_loop():
     """Create an instance of the default event loop for each test case."""
     loop = asyncio.get_event_loop_policy().new_event_loop()
@@ -27,7 +27,7 @@ def client():
 
 
 @pytest.fixture(autouse=True)
-async def setup_test_db():
+async def setup_test_db(event_loop):
     """Fixture to set up any test database or test state before each test."""
     # Setup test database or state here
     yield

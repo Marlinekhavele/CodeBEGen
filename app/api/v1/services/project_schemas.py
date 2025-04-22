@@ -46,21 +46,13 @@ class GetAllSchemas:
 
             schemas = []
             for item in contents:
-                if (
-                    item["type"] == "file"
-                    and item["name"].endswith(".py")  # Look for .py files
-                    and item["name"] != "__init__.py"
-                    and not item["name"].startswith("_")
-                    and "__pycache__" not in item["path"]
-                ):
+                if item["type"] == "file" and not item["name"].startswith("_"):
 
                     file_response = requests.get(item["url"])
                     if file_response.status_code == 200:
                         schemas.append(
                             {
-                                "name": item["name"].replace(
-                                    ".py", ""
-                                ),  # Remove .py extension
+                                "name": item["name"].rsplit(".", 1)[0],
                                 "path": item["path"],
                                 "url": item["html_url"],
                                 "size": item["size"],

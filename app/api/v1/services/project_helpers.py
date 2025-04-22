@@ -48,27 +48,22 @@ class GetAllHelpers:
             for item in contents:
                 if (
                     item["type"] == "file"
-                    and (item["name"].endswith(".py") or item["name"].endswith(".sh"))
-                    and item["name"] != "__init__.py"
                     and not item["name"].startswith("_")
                     and "__pycache__" not in item["path"]
+                    and item["name"] != "__init__.py"
                 ):
-
                     file_response = requests.get(item["url"])
                     if file_response.status_code == 200:
+                        # Get the extension-agnostic name (remove the last file extension)
+                        name_without_ext = item["name"].rsplit(".", 1)[0]
+
                         helpers.append(
                             {
-                                "name": item["name"]
-                                .replace(".py", "")
-                                .replace(".sh", ""),
+                                "name": name_without_ext,
                                 "path": item["path"],
                                 "url": item["html_url"],
                                 "size": item["size"],
-                                "type": (
-                                    "python"
-                                    if item["name"].endswith(".py")
-                                    else "shell"
-                                ),
+                                "type": item["name"].rsplit(".", 1)[-1],
                             }
                         )
 

@@ -122,7 +122,11 @@ codebegen/
      ```sh
      .venv\Scripts\Activate
      ```
-
+-  If you don't have poetry install
+   ```sh
+    pip install poetry 
+   ```
+  
 3. **Install project dependencies**:  
 
    ```sh
@@ -140,6 +144,64 @@ codebegen/
 ```sh
 poetry run python main.py
 ```
+**Docker Setup and Deployment**:
+### Prerequisites for Docker
+
+- Docker installed on your machine
+- Docker Compose installed on your machine
+
+### Running with Docker Compose
+
+Configure environment variables:
+```sh
+ .env.sample .env
+```
+🔹 Important variables:
+```env
+APP_PORT=8000  # Port where the app will be accessible
+DB_USER=postgres
+DB_PASSWORD=password
+DB_NAME=code_be_gen
+```
+
+### Build and start the containers:
+```sh
+docker-compose up -d
+```
+- This builds the application image and starts both the application and PostgreSQL containers in detached mode.
+Access the application at http://localhost:8000 (or your configured port)
+Stop the containers:
+```sh
+docker-compose down
+```
+### Docker Commands Reference
+- View application logs:
+```sh
+docker-compose logs -f backend
+```
+- Run database migrations in Docker:
+```sh
+docker-compose exec backend alembic upgrade head
+```
+- Rebuild after code changes:
+```sh
+docker-compose build backend
+docker-compose up -d
+```
+- Open a shell in the container:
+```sh
+docker-compose exec backend bash
+```
+Troubleshooting Docker Setup
+✅ Database Connection Issues:
+Check if PostgreSQL container is healthy:
+```sh
+docker-compose ps
+```
+✅ Port Conflicts:
+Modify `APP_PORT`in your `.env` file if port 8000 is already in use.
+✅ Permission Issues:
+You may need to use `sudo` before Docker commands or add your user to the Docker group.
 
 ## **Database Setup**  
 

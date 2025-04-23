@@ -308,6 +308,42 @@ class PythonTemplate(LanguageTemplate):
 
         return result
 
+    async def generate_dockerfile(self, project_id: str, entity_name: str) -> str:
+        """
+        Generate a Dockerfile for Python FastAPI application.
+
+        Args:
+            project_id (str): The project ID
+            entity_name (str): The name of the entity
+
+        Returns:
+            str: Dockerfile content
+        """
+        try:
+            # Use the prompt template via LangchainService
+            result = await LangchainService.generate_code_with_template(
+                template_name="dockerfile",
+                language="python",
+                project_id=project_id,
+                entity_name=entity_name,
+            )
+
+            return result["generated_code"]
+        except Exception as e:
+            logger.error(f"Error generating Dockerfile: {str(e)}")
+            # Fallback to a default Dockerfile if generation fails
+            return """FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+# Run migrations if applicable
+RUN alembic upgrade head || true
+# Start the server
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+"""
+
     def get_commit_strategy(self) -> Dict[str, Any]:
         """
         Get strategy for committing Python components to version control.

@@ -186,23 +186,14 @@ def configure_git_for_project(project_dir):
     # Set Git to use credential helper with store option
     run_git_command(["git", "config", "credential.helper", "store"], cwd=project_dir)
 
-    # Disable SSL verification
-    gitea_domain = "159.203.105.4"
+    # Always set user information with default values if not configured
+    run_git_command(["git", "config", "user.name", "CodeBEGen Bot"], cwd=project_dir)
     run_git_command(
-        ["git", "config", f"http.{gitea_domain}.sslVerify", "false"], cwd=project_dir
+        ["git", "config", "user.email", "bot@codebegen.com"], cwd=project_dir
     )
-
-    # Set user information if needed (optional)
-    if hasattr(settings, "GIT_USER_NAME") and hasattr(settings, "GIT_USER_EMAIL"):
-        run_git_command(
-            ["git", "config", "user.name", settings.GIT_USER_NAME], cwd=project_dir
-        )
-        run_git_command(
-            ["git", "config", "user.email", settings.GIT_USER_EMAIL], cwd=project_dir
-        )
-        run_git_command(
-            ["git", "config", "--global", "init.defaultBranch", "main"], cwd=project_dir
-        )
+    run_git_command(
+        ["git", "config", "--global", "init.defaultBranch", "main"], cwd=project_dir
+    )
 
     return True
 

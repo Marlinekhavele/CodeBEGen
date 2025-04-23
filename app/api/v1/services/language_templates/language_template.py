@@ -83,6 +83,20 @@ class LanguageTemplate(ABC):
         pass
 
     @abstractmethod
+    async def generate_dockerfile(self, project_id: str, entity_name: str) -> str:
+        """
+        Generate a Dockerfile appropriate for this language/framework.
+
+        Args:
+            project_id (str): The project ID
+            entity_name (str): The name of the entity
+
+        Returns:
+            str: Dockerfile content
+        """
+        pass
+
+    @abstractmethod
     async def generate_component(
         self,
         component_type: str,

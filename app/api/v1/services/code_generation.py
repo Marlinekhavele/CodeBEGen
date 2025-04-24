@@ -257,20 +257,15 @@ class CodeGenerationService:
             # Step 6: Generate Dockerfile - ALWAYS generate regardless of database needs
             try:
                 logger.info(f"About to generate Dockerfile for {entity_name}")
-                # FIX: Add await keyword here to properly wait for the async function
-                dockerfile_content = await language_template.generate_dockerfile(
-                    project_id, entity_name
-                )
+                await self._notify_event("start", "dockerfile", {"entity_name": entity_name})
+                dockerfile_content = await language_template.generate_dockerfile(project_id, entity_name)
                 result["dockerfile"] = {
                     "file_path": "Dockerfile",
                     "generated_code": dockerfile_content,
-                    "content_base64": LangchainService.encode_content(
-                        dockerfile_content
-                    ),
-                    "file_hash": LangchainService.generate_file_hash(
-                        dockerfile_content
-                    ),
+                    "content_base64": LangchainService.encode_content(dockerfile_content),
+                    "file_hash": LangchainService.generate_file_hash(dockerfile_content),
                 }
+                await self._notify_event("complete", "dockerfile", result["dockerfile"])
                 logger.info("Generated Dockerfile successfully")
             except Exception as e:
                 error_msg = f"Error generating Dockerfile: {str(e)}"
@@ -280,20 +275,21 @@ class CodeGenerationService:
             # Step 7: Generate API documentation - ALWAYS generate regardless of database needs
             try:
                 logger.info(f"About to generate API docs for {entity_name}")
-                # FIX: Add await keyword here to properly wait for the async function
+                await self._notify_event("start", "api_docs", {"entity_name": entity_name})
                 api_docs_content = await self._generate_api_docs(
                     project_id,
                     entity_name,
                     method,
                     endpoint_path,
-                    result["endpoint"].get("generated_code", ""),
+                    result["endpoint"].get("generated_code", "")
                 )
                 result["api_docs"] = {
-                    "file_path": "docs/api.json",
+                    "file_path": "docs/api.md",
                     "generated_code": api_docs_content,
                     "content_base64": LangchainService.encode_content(api_docs_content),
                     "file_hash": LangchainService.generate_file_hash(api_docs_content),
                 }
+                await self._notify_event("complete", "api_docs", result["api_docs"])
                 logger.info("Generated API documentation successfully")
             except Exception as e:
                 error_msg = f"Error generating API documentation: {str(e)}"
@@ -1033,6 +1029,47 @@ class CodeGenerationService:
                 logger.error(
                     f"Failed to commit {component_type}: {str(e)}", exc_info=True
                 )
+
+        # After the regular component processing loop, explicitly handle dockerfile and api_docs
+        for special_component in ["dockerfile", "api_docs"]:
+            logger.info(f"Explicitly processing {special_component}")
+            
+            component_data = generation_result.get(special_component, {})
+            
+            # Skip if component doesn't exist or was already committed
+            if not component_data or component_data.get("already_committed", False):
+                logger.info(f"Skipping explicit {special_component} - not found or already committed")
+                continue
+            
+            # Skip if no generated code or file path
+            if not component_data.get("generated_code") or not component_data.get("file_path"):
+                logger.info(f"Skipping explicit {special_component} - no generated code or file path")
+                continue
+            
+            try:
+                # Use default message
+                commit_message = f"Add {entity_name} {special_component.replace('_', ' ')}"
+                
+                logger.info(f"Explicitly committing {special_component} with message: {commit_message}")
+                
+                # Commit the file
+                commit_result = await GitService.commit_file_update(
+                    project_id=project_id,
+                    new_code=component_data.get("generated_code", ""),
+                    file_path=component_data.get("file_path", ""),
+                    commit_message=commit_message,
+                )
+                
+                # Store the result
+                git_results[special_component] = commit_result
+                
+                # Mark as committed
+                component_data["already_committed"] = True
+                
+                logger.info(f"Explicitly committed {special_component} file: {component_data.get('file_path')}")
+                
+            except Exception as e:
+                logger.error(f"Failed to explicitly commit {special_component}: {str(e)}", exc_info=True)
 
         return git_results
 

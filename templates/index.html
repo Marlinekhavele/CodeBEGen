@@ -720,6 +720,7 @@
                             case 'progress':
                                 updateStatusBar(`${data.stage}: ${data.message}`);
                                 addStatusMessage(`[${data.stage}] ${data.message}`);
+                                // Clear editor if starting a new component
                                 if (editor) editor.setValue('');
                                 isStreaming = true;
                                 break;
@@ -730,41 +731,47 @@
                                 isStreaming = false;
                                 
                                 // Save the generated file
-                                generatedFiles[data.result.file_path] = data.result;
-                                
-                                // Update file list
-                                updateFileList();
-                                
-                                // Display the generated code in Monaco Editor
-                                currentFile = data.result.file_path;
-                                
-                                if (editor) {
-                                    // Detect language from file extension
-                                    const fileExtension = data.result.file_path.split('.').pop().toLowerCase();
-                                    let language = selectedLanguage;
+                                if (data.result && data.result.file_path) {
+                                    generatedFiles[data.result.file_path] = data.result;
                                     
-                                    // Map file extensions to Monaco language identifiers
-                                    const languageMap = {
-                                        'py': 'python',
-                                        'js': 'javascript',
-                                        'html': 'html',
-                                        'css': 'css',
-                                        'json': 'json',
-                                        'md': 'markdown',
-                                        'sql': 'sql',
-                                        'ts': 'typescript'
-                                    };
+                                    // Update file list
+                                    updateFileList();
                                     
-                                    if (languageMap[fileExtension]) {
-                                        language = languageMap[fileExtension];
+                                    // Display the generated code in Monaco Editor
+                                    currentFile = data.result.file_path;
+                                    
+                                    if (editor) {
+                                        // Detect language from file extension
+                                        const fileExtension = data.result.file_path.split('.').pop().toLowerCase();
+                                        let language = selectedLanguage;
+                                        
+                                        // Map file extensions to Monaco language identifiers
+                                        const languageMap = {
+                                            'py': 'python',
+                                            'js': 'javascript',
+                                            'html': 'html',
+                                            'css': 'css',
+                                            'json': 'json',
+                                            'md': 'markdown',
+                                            'sql': 'sql',
+                                            'ts': 'typescript',
+                                            'dockerfile': 'dockerfile'  // Add support for Dockerfile
+                                        };
+                                        
+                                        // Handle case where file_path is exactly "Dockerfile"
+                                        if (data.result.file_path.toLowerCase() === 'dockerfile') {
+                                            language = 'dockerfile';
+                                        } else if (languageMap[fileExtension]) {
+                                            language = languageMap[fileExtension];
+                                        }
+                                        
+                                        // Update editor model
+                                        const model = monaco.editor.createModel(
+                                            data.result.generated_code,
+                                            language
+                                        );
+                                        editor.setModel(model);
                                     }
-                                    
-                                    // Update editor model
-                                    const model = monaco.editor.createModel(
-                                        data.result.generated_code,
-                                        language
-                                    );
-                                    editor.setModel(model);
                                 }
                                 break;
                                 
@@ -772,6 +779,22 @@
                                 updateStatusBar('Code generation complete!', false);
                                 addStatusMessage('Code generation complete!');
                                 isStreaming = false;
+                                
+                                // Handle final results
+                                if (data.result) {
+                                    // Save Dockerfile if present
+                                    if (data.result.dockerfile) {
+                                        generatedFiles['Dockerfile'] = data.result.dockerfile;
+                                    }
+                                    
+                                    // Save API docs if present
+                                    if (data.result.api_docs) {
+                                        generatedFiles['docs/api.json'] = data.result.api_docs;
+                                    }
+                                    
+                                    // Update file list with all files
+                                    updateFileList();
+                                }
                                 
                                 // Log full result
                                 console.log('Final result:', data.result);

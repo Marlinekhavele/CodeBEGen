@@ -360,6 +360,8 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
                 "schema": "Add {entity_name} schema",
                 "migration": "Add migration for {entity_name} model",
                 "helpers": "Add helper functions for {entity_name}",
+                "dockerfile": "Add Dockerfile for {entity_name}",
+                "api_docs": "Add API documentation for {entity_name}",
             },
         }
 

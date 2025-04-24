@@ -320,6 +320,8 @@ class JavaScriptTemplate(LanguageTemplate):
                 "utils",
                 "route",
                 "migration",
+                "dockerfile",
+                "api_docs",
             ],
             "commit_order": [
                 "model",
@@ -328,6 +330,8 @@ class JavaScriptTemplate(LanguageTemplate):
                 "controller",
                 "route",
                 "migration",
+                "dockerfile",
+                "api_docs", 
             ],
             "commit_messages": {
                 "controller": "Add {entity_name} controller",
@@ -336,6 +340,8 @@ class JavaScriptTemplate(LanguageTemplate):
                 "utils": "Add utility functions for {entity_name}",
                 "route": "Add routes for {entity_name} API",
                 "migration": "Add database migration for {entity_name}",
+                "dockerfile": "Add Dockerfile for {entity_name}",
+                "api_docs": "Add API documentation for {entity_name}",
             },
         }
 

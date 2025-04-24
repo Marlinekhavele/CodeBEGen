@@ -128,16 +128,29 @@ class GitService:
             project_dir = get_project_dir_from_repo_url(repo_url)
             logger.info(f"Found project directory at {project_dir}")
 
+            # Normalize the file path and handle both absolute and relative paths
+            file_path = file_path.replace("\\", "/")  # Normalize slashes
+            if os.path.isabs(file_path):
+                # If absolute path, make it relative to project_dir
+                try:
+                    file_path = os.path.relpath(file_path, project_dir)
+                except ValueError:
+                    # If relpath fails, just use the filename
+                    file_path = os.path.basename(file_path)
+
             # Determine full file path
-            full_file_path = project_dir / file_path
+            full_file_path = os.path.join(project_dir, file_path)
             logger.info(f"Full file path: {full_file_path}")
 
             # Create directory structure if it doesn't exist
-            os.makedirs(os.path.dirname(full_file_path), exist_ok=True)
+            directory = os.path.dirname(full_file_path)
+            if directory and not os.path.exists(directory):
+                logger.info(f"Creating directory: {directory}")
+                os.makedirs(directory, exist_ok=True)
 
             # Write the new code to the specified file
             logger.info(f"Writing {len(new_code)} bytes to {full_file_path}")
-            with open(full_file_path, "w") as file:
+            with open(full_file_path, "w", encoding="utf-8") as file:
                 file.write(new_code)
 
             # Stage the changes for the specified file
@@ -151,7 +164,14 @@ class GitService:
                 f"Committing file to Git repository with message: {commit_message}"
             )
 
-            # Commit the changes
+            # Commit the changes with specific git config
+            run_git_command(
+                ["git", "config", "user.name", "CodeBEGen Bot"], cwd=project_dir
+            )
+            run_git_command(
+                ["git", "config", "user.email", "codebegen@example.com"],
+                cwd=project_dir,
+            )
             run_git_command(["git", "commit", "-m", commit_message], cwd=project_dir)
 
             # Get the new commit hash

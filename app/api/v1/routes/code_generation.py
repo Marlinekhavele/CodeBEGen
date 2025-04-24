@@ -135,6 +135,16 @@ async def generate_code_stream(websocket: WebSocket, db: Session = Depends(get_d
             on_migration_complete=lambda event, data: on_component_complete(
                 "migration", data
             ),
+            on_dockerfile_start=lambda event, data: on_component_start(
+                "dockerfile", data
+            ),
+            on_dockerfile_complete=lambda event, data: on_component_complete(
+                "dockerfile", data
+            ),
+            on_api_docs_start=lambda event, data: on_component_start("api_docs", data),
+            on_api_docs_complete=lambda event, data: on_component_complete(
+                "api_docs", data
+            ),
             on_info=on_info,
         )
 

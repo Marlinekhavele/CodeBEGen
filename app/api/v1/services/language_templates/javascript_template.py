@@ -1,9 +1,12 @@
 import datetime
+import logging
 import re
 from typing import Any, Dict, List, Optional
 
 from app.api.v1.services.langchain_service import LangchainService
 from app.api.v1.services.language_templates.language_template import LanguageTemplate
+
+logger = logging.getLogger(__name__)
 
 
 class JavaScriptTemplate(LanguageTemplate):
@@ -317,6 +320,8 @@ class JavaScriptTemplate(LanguageTemplate):
                 "utils",
                 "route",
                 "migration",
+                "dockerfile",
+                "api_docs",
             ],
             "commit_order": [
                 "model",
@@ -325,6 +330,8 @@ class JavaScriptTemplate(LanguageTemplate):
                 "controller",
                 "route",
                 "migration",
+                "dockerfile",
+                "api_docs",
             ],
             "commit_messages": {
                 "controller": "Add {entity_name} controller",
@@ -333,6 +340,8 @@ class JavaScriptTemplate(LanguageTemplate):
                 "utils": "Add utility functions for {entity_name}",
                 "route": "Add routes for {entity_name} API",
                 "migration": "Add database migration for {entity_name}",
+                "dockerfile": "Add Dockerfile for {entity_name}",
+                "api_docs": "Add API documentation for {entity_name}",
             },
         }
 
@@ -379,3 +388,39 @@ class JavaScriptTemplate(LanguageTemplate):
         """
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         return f"{timestamp}-create-{entity_name}"
+
+    async def generate_dockerfile(self, project_id: str, entity_name: str) -> str:
+        """
+        Generate a Dockerfile for JavaScript/Node.js application.
+
+        Args:
+            project_id (str): The project ID
+            entity_name (str): The name of the entity
+
+        Returns:
+            str: Dockerfile content
+        """
+        try:
+            # Use the prompt template via LangchainService
+            result = LangchainService.generate_code_with_template(
+                template_name="dockerfile",
+                language="javascript",
+                project_id=project_id,
+                entity_name=entity_name,
+            )
+
+            return result["generated_code"]
+        except Exception as e:
+            logger.error(f"Error generating Dockerfile: {str(e)}")
+            # Fallback to a default Dockerfile if generation fails
+            return """FROM node:18-slim
+    WORKDIR /app
+    COPY package*.json ./
+    RUN npm install
+    COPY . .
+    # Run migrations if applicable
+    RUN npm run migrate || true
+    # Start the server
+    EXPOSE 8000
+    CMD ["npm", "start"]
+    """

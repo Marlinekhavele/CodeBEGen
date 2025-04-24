@@ -20,6 +20,11 @@ class PromptManager:
             return
 
         # Load basic Python templates
+        # Load API docs and Dockerfile templates
+        from app.api.v1.utils.docker_api_templates import (
+            API_DOCS_GENERATION_TEMPLATE,
+            DOCKERFILE_GENERATION_TEMPLATE,
+        )
         from app.api.v1.utils.prompt_templates_py import (
             ENDPOINT_GENERATION_TEMPLATE,
             HELPER_FUNCTIONS_TEMPLATE,
@@ -70,6 +75,7 @@ class PromptManager:
                 "prompt_description",
                 "existing_model_code",
                 "endpoint_context",
+                "project_id",
             ]
 
             # Create a pattern to identify valid placeholders
@@ -100,6 +106,12 @@ class PromptManager:
                 "model_changes": PromptTemplate.from_template(
                     escape_template_braces(PYTHON_MODEL_CHANGES_TEMPLATE)
                 ),
+                "api_docs": PromptTemplate.from_template(
+                    escape_template_braces(API_DOCS_GENERATION_TEMPLATE)
+                ),
+                "dockerfile": PromptTemplate.from_template(
+                    escape_template_braces(DOCKERFILE_GENERATION_TEMPLATE)
+                ),
             }
         }
 
@@ -126,6 +138,12 @@ class PromptManager:
                 ),
                 "model_changes": PromptTemplate.from_template(
                     escape_template_braces(JS_MODEL_CHANGES_TEMPLATE)
+                ),
+                "api_docs": PromptTemplate.from_template(
+                    escape_template_braces(API_DOCS_GENERATION_TEMPLATE)
+                ),
+                "dockerfile": PromptTemplate.from_template(
+                    escape_template_braces(DOCKERFILE_GENERATION_TEMPLATE)
                 ),
             }
 

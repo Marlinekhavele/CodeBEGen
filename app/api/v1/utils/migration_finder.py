@@ -21,8 +21,9 @@ def get_latest_migration_id(alembic_dir: str = "alembic") -> str:
         from alembic.config import Config
         from alembic.script import ScriptDirectory
 
-        logger.debug(f"Trying to use Alembic API with directory: {alembic_dir}")
-        alembic_cfg = Config(os.path.join(alembic_dir, "alembic.ini"))
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        alembic_ini_path = os.path.join(base_dir, "alembic.ini")
+        alembic_cfg = Config(alembic_ini_path)
         script = ScriptDirectory.from_config(alembic_cfg)
         heads = script.get_heads()
 

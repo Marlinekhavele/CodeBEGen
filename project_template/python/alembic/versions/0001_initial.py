@@ -1,6 +1,6 @@
 """Initial migration
 
-Revision ID: 0001
+Revision ID: 8b7c9d0e1f2a
 Revises: 
 Create Date: 2024-01-01 00:00:00.000000
 
@@ -8,7 +8,7 @@ Create Date: 2024-01-01 00:00:00.000000
 from alembic import op
 import sqlalchemy as sa
 
-revision = '0001'
+revision = '8b7c9d0e1f2a'
 down_revision = None
 branch_labels = None
 depends_on = None

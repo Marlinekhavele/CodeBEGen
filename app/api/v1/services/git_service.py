@@ -189,3 +189,96 @@ class GitService:
         except Exception as e:
             logger.error(f"Git file operation failed: {str(e)}")
             raise e
+
+    @staticmethod
+    async def commit_binary_file_update(
+        project_id: str, binary_content: bytes, file_path: str, commit_message: str = None
+    ) -> str:
+        """
+        Commit a binary file to the project repository and return the new commit hash.
+
+        Parameters:
+        project_id (str): The project ID (slug)
+        binary_content (bytes): The binary content to be written to the file
+        file_path (str): The relative path to the file within the project
+        commit_message (str, optional): Custom commit message. If not provided, a default one will be used.
+
+        Returns:
+        str: The new commit hash after the changes have been committed.
+
+        Raises:
+        ValueError: If the project directory does not exist.
+        subprocess.CalledProcessError: If any git command fails.
+        """
+        try:
+            # Get the repository URL for the project
+            repo_url = get_repo_url(project_id)
+            logger.info(
+                f"Committing binary file update for project {project_id} with repo URL: {repo_url}"
+            )
+
+            # Get the project directory
+            project_dir = get_project_dir_from_repo_url(repo_url)
+            logger.info(f"Found project directory at {project_dir}")
+
+            # Normalize the file path and handle both absolute and relative paths
+            file_path = file_path.replace("\\", "/")  # Normalize slashes
+            if os.path.isabs(file_path):
+                # If absolute path, make it relative to project_dir
+                try:
+                    file_path = os.path.relpath(file_path, project_dir)
+                except ValueError:
+                    # If relpath fails, just use the filename
+                    file_path = os.path.basename(file_path)
+
+            # Determine full file path
+            full_file_path = os.path.join(project_dir, file_path)
+            logger.info(f"Full file path: {full_file_path}")
+
+            # Create directory structure if it doesn't exist
+            directory = os.path.dirname(full_file_path)
+            if directory and not os.path.exists(directory):
+                logger.info(f"Creating directory: {directory}")
+                os.makedirs(directory, exist_ok=True)
+
+            # Write the binary content to the specified file
+            logger.info(f"Writing {len(binary_content)} bytes to {full_file_path}")
+            with open(full_file_path, "wb") as file:
+                file.write(binary_content)
+
+            # Stage the changes for the specified file
+            logger.info(f"Adding file to Git index: {file_path}")
+            run_git_command(["git", "add", file_path], cwd=project_dir)
+
+            # Prepare commit message
+            if not commit_message:
+                commit_message = f'Add/update binary file "{file_path}"'
+            logger.info(
+                f"Committing binary file to Git repository with message: {commit_message}"
+            )
+
+            # Commit the changes with specific git config
+            run_git_command(
+                ["git", "config", "user.name", "CodeBEGen Bot"], cwd=project_dir
+            )
+            run_git_command(
+                ["git", "config", "user.email", "codebegen@example.com"],
+                cwd=project_dir,
+            )
+            run_git_command(["git", "commit", "-m", commit_message], cwd=project_dir)
+
+            # Get the new commit hash
+            logger.info("Getting commit hash")
+            commit_hash = run_git_command(["git", "rev-parse", "HEAD"], cwd=project_dir)
+            logger.info(f"Commit hash: {commit_hash}")
+
+            # Push changes
+            logger.info("Pushing changes to remote repository")
+            push_result = run_git_command(["git", "push"], cwd=project_dir)
+            logger.info(f"Push result: {push_result}")
+
+            return commit_hash
+
+        except Exception as e:
+            logger.error(f"Git binary file operation failed: {str(e)}")
+            raise e

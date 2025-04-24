@@ -31,26 +31,11 @@ class ModelSchemaManager:
         generate_migration: bool = True,
         language: str = "python",
     ) -> Optional[Dict[str, Any]]:
-        """
-        Process changes to models and schemas based on user prompt,
-        using appropriate language-specific updaters.
-
-        Args:
-            project_id (str): Project identifier.
-            entity_name (str): Name of the entity.
-            prompt_description (str): User's prompt describing the changes.
-            endpoint_code (Optional[str], optional): Endpoint code for context.
-            generate_migration (bool, optional): Whether to generate migration.
-            language (str, optional): Programming language.
-
-        Returns:
-            Optional[Dict[str, Any]]: Result of the process.
-        """
         try:
-            # Get the language template for proper path resolution
+            # Get language template
             language_template = LanguageTemplateFactory.get_template(language)
-
-            # Analyze the project with the specified language
+            
+            # Get project analysis
             project_analysis = await ProjectAnalysisService.analyze_project(
                 project_id, language=language
             )
@@ -72,27 +57,14 @@ class ModelSchemaManager:
             with open(model_path, "r") as f:
                 existing_model_code = f.read()
 
-            # Extract required changes using LLM
-            field_changes = await ModelSchemaManager.analyze_required_changes(
-                prompt_description=prompt_description,
-                endpoint_code=endpoint_code,
-                entity_name=entity_name,
-                existing_model_code=existing_model_code,
-                language=language,
+            # Use LLM to identify needed field changes
+            field_changes = await ModelSchemaManager._identify_field_changes(
+                prompt_description,
+                existing_model_code,
+                endpoint_code,
             )
 
-            if not field_changes:
-                logger.info(f"No changes required for {entity_name} model")
-                return {
-                    "model_updated": False,
-                    "model_file": model_file,
-                    "message": "No changes needed",
-                    "file_hash": LangchainService.generate_file_hash(
-                        existing_model_code
-                    ),
-                }
-
-            # Get the appropriate model updater
+            # Get model updater for this language
             model_updater = ModelSchemaManagerFactory.get_model_updater(language)
 
             # Update the model
@@ -103,37 +75,52 @@ class ModelSchemaManager:
             # Update the model file
             ModelSchemaManager._update_model_file(model_path, updated_content)
 
-            # Prepare files to commit
+            # Initialize result to track file changes
             files_to_commit = []
+            result = {
+                "model_updated": change_summary.get("changes_made", False),
+                "content_base64": LangchainService.encode_content(updated_content),
+                "file_hash": LangchainService.generate_file_hash(updated_content),
+                "model_file": model_file,
+                "field_changes": change_summary,
+            }
+
             if change_summary.get("changes_made", False):
-                files_to_commit.append(
-                    {
-                        "file_path": model_file,
-                        "commit_message": f"feat: Update {entity_name} model with {len(change_summary.get('added_fields', []))} new fields",
-                        "content": updated_content,
+                # Add model to files to commit
+                files_to_commit.append({
+                    "file_path": model_file,
+                    "commit_message": f"feat: Update {entity_name} model with {len(change_summary.get('added_fields', []))} new fields",
+                    "content": updated_content,
+                })
+
+                # Generate migration if requested and changes were made
+                if generate_migration:
+                    # Create result dictionary for migration generation
+                    migration_result = {
+                        "model": {
+                            "file_path": model_file,
+                            "generated_code": updated_content,
+                            "content_base64": LangchainService.encode_content(updated_content),
+                            "file_hash": LangchainService.generate_file_hash(updated_content),
+                            "exists": True,
+                            "updated": True,
+                            "entity_name": entity_name,
+                        }
                     }
-                )
-
-            # Generate migration if requested and language supports it
-            migration_result = None
-            if generate_migration and change_summary.get("changes_made", False):
-                # Check if this language supports migrations
-                if language_template.has_component("migration"):
-                    migration_result = await ModelSchemaManager._generate_migration(
-                        project_id, entity_name, language, updated_content
-                    )
-
-                    # Add migration to commit list if generated
-                    if migration_result and "generated_code" in migration_result:
-                        files_to_commit.append(
-                            {
-                                "file_path": migration_result.get("file_path"),
-                                "commit_message": f"feat: Add migration for {entity_name} model changes",
-                                "content": migration_result.get("generated_code"),
-                            }
+                    
+                    # Use language template's _generate_and_migrate method
+                    try:
+                        await language_template.run_migrations(
+                            project_dir=Path(f"repos/{project_id}"),
+                            entity_name=entity_name
                         )
+                        result["migration_status"] = "success"
+                    except Exception as e:
+                        logger.error(f"Error generating migration: {str(e)}")
+                        result["migration_status"] = "failed"
+                        result["migration_error"] = str(e)
 
-            # Update schemas
+            # Update schemas if needed
             schema_results = await ModelSchemaManager._update_schemas(
                 project_id,
                 entity_name,
@@ -143,13 +130,11 @@ class ModelSchemaManager:
                 language,
                 language_template,
             )
-            logger.debug(f"Schema update results: {schema_results}")
+
             # Add schema files to commit list if updated
             if schema_results.get("schema_updated", False):
                 for schema_result in schema_results.get("schema_results", []):
-                    if schema_result.get("updated", False) and schema_result.get(
-                        "content"
-                    ):
+                    if schema_result.get("updated", False) and schema_result.get("content"):
                         schema_file_path = ModelSchemaManager._get_schema_file_path(
                             project_id,
                             entity_name,
@@ -157,31 +142,24 @@ class ModelSchemaManager:
                             language,
                             language_template,
                         )
+                        files_to_commit.append({
+                            "file_path": schema_file_path,
+                            "commit_message": f"feat: Update {entity_name} schemas with new fields",
+                            "content": schema_result.get("content"),
+                        })
 
-                        files_to_commit.append(
-                            {
-                                "file_path": schema_file_path,
-                                "commit_message": f"feat: Update {entity_name} schemas with new fields",
-                                "content": schema_result.get("content"),
-                            }
-                        )
+            # Add files to commit to the result
+            result["files_to_commit"] = files_to_commit
+            result["schema_results"] = schema_results
 
-            # Return the results
-            return {
-                "model_updated": change_summary.get("changes_made", False),
-                "model_file": model_file,
-                "content_base64": LangchainService.encode_content(updated_content),
-                "field_changes": change_summary,
-                "file_hash": LangchainService.generate_file_hash(updated_content),
-                "migration": migration_result,
-                "schema_updated": schema_results.get("schema_updated", False),
-                "schema_results": schema_results.get("schema_results", []),
-                "files_to_commit": files_to_commit,
-            }
+            return result
 
         except Exception as e:
-            logger.error(f"Error processing model changes: {str(e)}", exc_info=True)
-            return {"model_updated": False, "error": str(e)}
+            logger.error(f"Error in process_model_changes: {str(e)}", exc_info=True)
+            return {
+                "error": str(e),
+                "model_updated": False,
+            }
 
     @staticmethod
     def _update_model_file(model_path: Path, updated_content: str) -> None:
@@ -332,33 +310,33 @@ class ModelSchemaManager:
 
         return schema_file_path
 
-    @staticmethod
-    async def _generate_migration(
-        project_id: str, entity_name: str, language: str, model_code: str
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Generate a migration for model changes.
+    # @staticmethod
+    # async def _generate_migration(
+    #     project_id: str, entity_name: str, language: str, model_code: str
+    # ) -> Optional[Dict[str, Any]]:
+    #     """
+    #     Generate a migration for model changes.
 
-        Args:
-            project_id (str): Project identifier.
-            entity_name (str): Name of the entity.
-            language (str): Programming language.
-            model_code (str): Updated model code.
+    #     Args:
+    #         project_id (str): Project identifier.
+    #         entity_name (str): Name of the entity.
+    #         language (str): Programming language.
+    #         model_code (str): Updated model code.
 
-        Returns:
-            Optional[Dict[str, Any]]: Migration result or None.
-        """
-        try:
-            # Generate migration using LangchainService
-            return await LangchainService.generate_migration(
-                project_id=project_id,
-                entity_name=entity_name,
-                language=language,
-                model_code=model_code,
-            )
-        except Exception as e:
-            logger.error(f"Error generating migration: {str(e)}", exc_info=True)
-            return None
+    #     Returns:
+    #         Optional[Dict[str, Any]]: Migration result or None.
+    #     """
+    #     try:
+    #         # Generate migration using LangchainService
+    #         return await LangchainService.generate_migration(
+    #             project_id=project_id,
+    #             entity_name=entity_name,
+    #             language=language,
+    #             model_code=model_code,
+    #         )
+    #     except Exception as e:
+    #         logger.error(f"Error generating migration: {str(e)}", exc_info=True)
+    #         return None
 
     @staticmethod
     async def _update_schemas(

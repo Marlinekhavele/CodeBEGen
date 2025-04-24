@@ -537,76 +537,76 @@ class LangchainService:
             )
             raise Exception(f"Failed to generate schema with Langchain: {str(e)}")
 
-    @staticmethod
-    async def generate_migration(
-        project_id: str,
-        entity_name: str,
-        language: str = "python",
-        model_code: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """
-        Generate migration code using Langchain with language support.
+    # @staticmethod
+    # async def generate_migration(
+    #     project_id: str,
+    #     entity_name: str,
+    #     language: str = "python",
+    #     model_code: Optional[str] = None,
+    # ) -> Dict[str, Any]:
+    #     """
+    #     Generate migration code using Langchain with language support.
 
-        Args:
-            project_id (str): Identifier for the project
-            entity_name (str): Name of the entity to create migrations for
-            language (str): Programming language to generate code for
-            model_code (Optional[str]): Optional model code for context
+    #     Args:
+    #         project_id (str): Identifier for the project
+    #         entity_name (str): Name of the entity to create migrations for
+    #         language (str): Programming language to generate code for
+    #         model_code (Optional[str]): Optional model code for context
 
-        Returns:
-            Dict[str, Any]: Dictionary with generated migration code and metadata
+    #     Returns:
+    #         Dict[str, Any]: Dictionary with generated migration code and metadata
 
-        Raises:
-            Exception: If migration generation fails
-        """
-        try:
-            # Determine the project path based on the project_id
-            project_path = f"repos/{project_id}"
-            alembic_dir = os.path.join(project_path, "alembic")
+    #     Raises:
+    #         Exception: If migration generation fails
+    #     """
+    #     try:
+    #         # Determine the project path based on the project_id
+    #         project_path = f"repos/{project_id}"
+    #         alembic_dir = os.path.join(project_path, "alembic")
 
-            # Determine the latest migration ID
-            try:
-                from app.api.v1.utils.migration_finder import get_latest_migration_id
+    #         # Determine the latest migration ID
+    #         try:
+    #             from app.api.v1.utils.migration_finder import get_latest_migration_id
 
-                latest_migration_id = get_latest_migration_id(alembic_dir=alembic_dir)
-            except Exception as e:
-                logger.warning(
-                    f"Could not determine latest migration ID: {str(e)}. Using 'base' as default."
-                )
-                latest_migration_id = "base"
+    #             latest_migration_id = get_latest_migration_id(alembic_dir=alembic_dir)
+    #         except Exception as e:
+    #             logger.warning(
+    #                 f"Could not determine latest migration ID: {str(e)}. Using 'base' as default."
+    #             )
+    #             latest_migration_id = "base"
 
-            logger.info(f"Using latest migration ID as parent: {latest_migration_id}")
+    #         logger.info(f"Using latest migration ID as parent: {latest_migration_id}")
 
-            # Use our new template-based generation
-            result = await LangchainService.generate_code_with_template(
-                template_name="migration",
-                language=language,
-                entity_name=entity_name,
-                latest_migration_id=latest_migration_id,
-                model_code=model_code or "# Model code not provided",
-            )
+    #         # Use our new template-based generation
+    #         result = await LangchainService.generate_code_with_template(
+    #             template_name="migration",
+    #             language=language,
+    #             entity_name=entity_name,
+    #             latest_migration_id=latest_migration_id,
+    #             model_code=model_code or "# Model code not provided",
+    #         )
 
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            revision_id = uuid.uuid4().hex[:8]
+    #         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    #         revision_id = uuid.uuid4().hex[:8]
 
-            # Use the appropriate file extension
-            file_extension = LangchainService.get_file_extension(language)
-            filename = f"{timestamp}_{revision_id}_create_{entity_name.lower()}{file_extension}"
+    #         # Use the appropriate file extension
+    #         file_extension = LangchainService.get_file_extension(language)
+    #         filename = f"{timestamp}_{revision_id}_create_{entity_name.lower()}{file_extension}"
 
-            # File path: alembic/versions/timestamp_revision_create_entity.[extension]
-            file_path = f"alembic/versions/{filename}"
+    #         # File path: alembic/versions/timestamp_revision_create_entity.[extension]
+    #         file_path = f"alembic/versions/{filename}"
 
-            result["entity_name"] = entity_name
-            result["file_path"] = file_path
-            result["parent_migration_id"] = latest_migration_id
+    #         result["entity_name"] = entity_name
+    #         result["file_path"] = file_path
+    #         result["parent_migration_id"] = latest_migration_id
 
-            return result
+    #         return result
 
-        except Exception as e:
-            logger.error(
-                f"Error generating migration with Langchain: {str(e)}", exc_info=True
-            )
-            raise Exception(f"Failed to generate migration with Langchain: {str(e)}")
+    #     except Exception as e:
+    #         logger.error(
+    #             f"Error generating migration with Langchain: {str(e)}", exc_info=True
+    #         )
+    #         raise Exception(f"Failed to generate migration with Langchain: {str(e)}")
 
     @staticmethod
     async def generate_helpers(

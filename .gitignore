@@ -182,3 +182,5 @@ jeff.py
 .dump.rdb
 .celery.log
 
+templates*
+static*

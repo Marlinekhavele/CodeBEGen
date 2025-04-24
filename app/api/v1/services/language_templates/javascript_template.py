@@ -331,7 +331,7 @@ class JavaScriptTemplate(LanguageTemplate):
                 "route",
                 "migration",
                 "dockerfile",
-                "api_docs", 
+                "api_docs",
             ],
             "commit_messages": {
                 "controller": "Add {entity_name} controller",

@@ -1,4 +1,3 @@
-
 # API Documentation template
 API_DOCS_GENERATION_TEMPLATE = """
 You are an expert API documentation writer helping to document a backend API.

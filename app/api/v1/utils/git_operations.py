@@ -193,9 +193,7 @@ def configure_git_for_project(project_dir):
     )
 
     # Always ensure user information is configured
-    run_git_command(
-        ["git", "config", "user.name", "CodeBEGen Bot"], cwd=project_dir
-    )
+    run_git_command(["git", "config", "user.name", "CodeBEGen Bot"], cwd=project_dir)
     run_git_command(
         ["git", "config", "user.email", "codebegen@example.com"], cwd=project_dir
     )

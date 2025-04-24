@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 @router.post(
     "/generate", response_model=CodeGenerationResponse, status_code=status.HTTP_200_OK
 )
-async def generate_code(request: CodeGenerationRequest):
+async def generate_code(request: CodeGenerationRequest,db: Session = Depends(get_db)):
     """
     Generates code based on a user-provided natural language description.
 
@@ -44,7 +44,7 @@ async def generate_code(request: CodeGenerationRequest):
     """
     try:
         code_gen_service = CodeGenerationService()
-        result = await code_gen_service.generate_code(request)
+        result = await code_gen_service.generate_code(request,db)
         return result
     except Exception as e:
         logger.error(f"Error in code generation: {str(e)}", exc_info=True)

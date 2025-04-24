@@ -39,9 +39,7 @@ class TestGetDocContent:
 
         responses.add(responses.GET, repo_api_url, json=response_data, status=200)
 
-        result = await GetAllDocs.get_doc_content_from_repo(
-            project_id, doc_name
-        )
+        result = await GetAllDocs.get_doc_content_from_repo(project_id, doc_name)
 
         assert isinstance(result, dict)
         assert result["name"] == doc_name
@@ -74,9 +72,7 @@ class TestGetDocContent:
 
         responses.add(responses.GET, md_repo_api_url, json=response_data, status=200)
 
-        result = await GetAllDocs.get_doc_content_from_repo(
-            project_id, doc_name
-        )
+        result = await GetAllDocs.get_doc_content_from_repo(project_id, doc_name)
 
         assert isinstance(result, dict)
         assert result["format"] == "text"
@@ -110,9 +106,7 @@ class TestGetDocContent:
 
         responses.add(responses.GET, repo_api_url, json=response_data, status=200)
 
-        result = await GetAllDocs.get_doc_content_from_repo(
-            project_id, doc_name
-        )
+        result = await GetAllDocs.get_doc_content_from_repo(project_id, doc_name)
 
         assert result["name"] == expected_doc_name
         assert result["content"] == doc_content
@@ -131,14 +125,14 @@ class TestGetDocContent:
             responses.GET, repo_api_url, json={"message": "Not Found"}, status=404
         )
 
-        result = await GetAllDocs.get_doc_content_from_repo(
-            project_id, doc_name
-        )
+        result = await GetAllDocs.get_doc_content_from_repo(project_id, doc_name)
 
         assert isinstance(result, JSONResponse)
         assert result.status_code == 404
         content = result.body.decode()
-        assert f"Documentation '{doc_name}' not found in project {project_id}" in content
+        assert (
+            f"Documentation '{doc_name}' not found in project {project_id}" in content
+        )
 
     @pytest.mark.asyncio
     @responses.activate
@@ -155,9 +149,7 @@ class TestGetDocContent:
             status=500,
         )
 
-        result = await GetAllDocs.get_doc_content_from_repo(
-            project_id, doc_name
-        )
+        result = await GetAllDocs.get_doc_content_from_repo(project_id, doc_name)
 
         assert isinstance(result, JSONResponse)
         assert result.status_code == 500
@@ -188,9 +180,7 @@ class TestGetDocContent:
 
         responses.add(responses.GET, repo_api_url, json=response_data, status=200)
 
-        result = await GetAllDocs.get_doc_content_from_repo(
-            project_id, doc_name
-        )
+        result = await GetAllDocs.get_doc_content_from_repo(project_id, doc_name)
 
         assert isinstance(result, dict)
         assert result["name"] == doc_name
@@ -230,7 +220,7 @@ class TestDocContentEndpoint:
 
         # Try different URL patterns
         response = client.get(f"/api/v1/projects/{project_id}/docs/{doc_name}/content")
-        
+
         # If that fails, try without api/v1 prefix
         if response.status_code == 404:
             response = client.get(f"/projects/{project_id}/docs/{doc_name}/content")
@@ -238,12 +228,15 @@ class TestDocContentEndpoint:
         assert response.status_code == 200
         response_json = response.json()
         print(f"Success response: {response_json}")
-        
+
         # Flexible assertions
         assert response_json.get("status") == "success" or "data" in response_json
         if "message" in response_json:
-            assert "Documentation Content Retrieved Successfully" in response_json["message"]
-        
+            assert (
+                "Documentation Content Retrieved Successfully"
+                in response_json["message"]
+            )
+
         # Check data field
         if "data" in response_json:
             data = response_json["data"]
@@ -265,16 +258,16 @@ class TestDocContentEndpoint:
 
         # Try different URL patterns
         response = client.get(f"/api/v1/projects/{project_id}/docs/{doc_name}/content")
-        
+
         assert response.status_code == 404
-        
+
         # Print actual response for debugging
         print(f"Response content: {response.content.decode()}")
-        
+
         try:
             response_json = response.json()
             print(f"Response JSON: {response_json}")
-            
+
             # Flexible assertions based on response format
             if "status" in response_json:
                 assert response_json["status"] == "error"
@@ -300,8 +293,8 @@ class TestDocContentEndpoint:
 
         # Try different URL patterns
         response = client.get(f"/api/v1/projects/{project_id}/docs/{doc_name}/content")
-        
+
         # Print actual response for debugging
         print(f"Response content: {response.content.decode()}")
-        
+
         assert response.status_code in (404, 500)

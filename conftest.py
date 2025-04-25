@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from app.api.v1.services.project_helpers import GetAllHelpers
 from app.api.v1.services.project_models import GetAllModels
 from app.api.v1.services.project_schemas import GetAllSchemas
+from app.api.v1.services.project_docs import GetAllDocs
 from main import app
 
 TEST_BASE_URL = "http://test"
@@ -77,3 +78,17 @@ def mock_get_schema_content():
     """Mock the get_schema_content_from_repo method."""
     with mock.patch.object(GetAllSchemas, "get_schema_content_from_repo") as _mock:
         yield _mock
+
+# Mocks for docs
+@pytest.fixture
+def mock_get_all_docs():
+    """Mock the get_all_docs_from_repo method."""
+    with mock.patch.object(GetAllDocs, "get_all_docs_from_repo") as _mock:
+        yield _mock
+@pytest.fixture
+def mock_get_doc_content():
+    """Mock the get_doc_content_from_repo method."""
+    with mock.patch.object(GetAllDocs, "get_doc_content_from_repo") as _mock:
+        yield _mock
+        
+        

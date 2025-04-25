@@ -12,7 +12,42 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["documentation"])
 
+@router.get("/projects/{project_id}/docs/", response_model=DocsContentSuccessResponse)
+async def list_docs(project_id: str):
+    """
+    Retrieves all documentation files for a specific project from the repository
+    Args:
+        project_id: The slug of the project
+    Returns:
+        DocsContentSuccessResponse: List of documentation files with their details
+    Raises:
+        HTTPException: If the project or documentation files are not found or for server-side errors
+    """
+    try:
+        docs = await GetAllDocs.get_all_docs_from_repo(project_id)
 
+        # Check if docs is a JSONResponse (error case)
+        if isinstance(docs, JSONResponse):
+            return docs
+
+        return success_response(
+            status_code=status.HTTP_200_OK,
+            message="Documentation Retrieved Successfully",
+            data=docs,
+        )
+    except ValueError as e:
+        return error_response(
+            status_code=status.HTTP_404_NOT_FOUND,
+            message="Documentation not found",
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving documentation: {str(e)}")
+        return error_response(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            message="Error retrieving documentation",
+            detail=str(e),
+        )
 @router.get(
     "/projects/{project_id}/docs/{doc_name}/content",
     response_model=DocsContentSuccessResponse,

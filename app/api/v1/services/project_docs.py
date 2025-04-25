@@ -11,6 +11,69 @@ logger = logging.getLogger(__name__)
 
 
 class GetAllDocs:
+    @staticmethod
+    async def get_all_docs_from_repo(project_id: str):
+        """
+        Retrieves all markdown docs from a specific project repository.
+        Only handles Markdown (.md) files for documentation.
+
+        Args:
+            project_id: The slug of the project
+        Returns:
+            List of docs
+        Raises:
+            ValueError: If the project or docs are not found
+            Exception: For any other errors
+        """
+        try:
+            repo_doc_url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/docs"
+
+            response = requests.get(repo_doc_url)
+
+            if response.status_code == 404:
+                return error_response(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    message="Docs directory not found",
+                    detail=f"Docs directory not found in project {project_id}",
+                )
+
+            if response.status_code != 200:
+                return error_response(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    message="Failed to fetch docs",
+                    detail=response.text,
+                )
+
+            # Parse the response
+            contents = response.json()
+
+            # Filter for markdown files (excluding __init__.py and other package files)
+            docs = []
+            for item in contents:
+                if item["type"] == "file" and item["name"].endswith(".md"):
+                    # Get the extension-agnostic name (remove the last file extension)
+                    name_without_ext = item["name"].rsplit(".", 1)[0]
+
+                    docs.append(
+                        {
+                            "name": name_without_ext,
+                            "type": "markdown",
+                        }
+                    )
+
+            return {
+                "status_code": status.HTTP_200_OK,
+                "message": "Docs retrieved successfully",
+                "data": docs,
+            }
+
+        except Exception as e:
+            logger.error(f"Error retrieving docs: {str(e)}")
+            return error_response(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="Failed to fetch docs",
+                detail=str(e),
+            )
 
     @staticmethod
     async def get_doc_content_from_repo(project_id: str, doc_name: str):

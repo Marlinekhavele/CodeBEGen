@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.api.v1.services.project_docs import GetAllDocs
 from app.api.v1.services.project_helpers import GetAllHelpers
+from app.api.v1.services.project_migrations import GetAlembicVersions
 from app.api.v1.services.project_models import GetAllModels
 from app.api.v1.services.project_schemas import GetAllSchemas
 from main import app
@@ -92,4 +93,21 @@ def mock_get_all_docs():
 def mock_get_doc_content():
     """Mock the get_doc_content_from_repo method."""
     with mock.patch.object(GetAllDocs, "get_doc_content_from_repo") as _mock:
+        yield _mock
+
+
+# Mocks for migrations
+@pytest.fixture
+def mock_get_all_versions():
+    """Mock the get_all_migrations_from_repo method."""
+    with mock.patch.object(GetAlembicVersions, "get_all_versions_from_repo") as _mock:
+        yield _mock
+
+
+@pytest.fixture
+def mock_get_version_content():
+    """Mock the get_version_content_from_repo method."""
+    with mock.patch.object(
+        GetAlembicVersions, "get_version_content_from_repo"
+    ) as _mock:
         yield _mock

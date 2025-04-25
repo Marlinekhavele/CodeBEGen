@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["documentation"])
 
+
 @router.get("/projects/{project_id}/docs/", response_model=DocsContentSuccessResponse)
 async def list_docs(project_id: str):
     """
@@ -48,6 +49,8 @@ async def list_docs(project_id: str):
             message="Error retrieving documentation",
             detail=str(e),
         )
+
+
 @router.get(
     "/projects/{project_id}/docs/{doc_name}/content",
     response_model=DocsContentSuccessResponse,

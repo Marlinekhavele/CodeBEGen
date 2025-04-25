@@ -26,7 +26,9 @@ class GetAllDocs:
             Exception: For any other errors
         """
         try:
-            repo_doc_url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/docs"
+            repo_doc_url = (
+                f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/docs"
+            )
 
             response = requests.get(repo_doc_url)
 

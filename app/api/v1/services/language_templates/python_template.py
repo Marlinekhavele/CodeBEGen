@@ -1,11 +1,10 @@
 import logging
 import re
 from typing import Any, Dict, List, Optional
-import subprocess
 from pathlib import Path
-import datetime
 from app.api.v1.services.langchain_service import LangchainService
 from app.api.v1.services.language_templates.language_template import LanguageTemplate
+from app.api.v1.services.git_service import GitService
 
 logger = logging.getLogger(__name__)
 
@@ -381,155 +380,212 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
         s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
         return re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
 
-    async def run_migrations(self, project_dir: Path, entity_name: str):
+    async def run_migrations(self, project_dir: Path) -> dict:
         """
-        Runs Alembic database migrations for a given project directory and entity.
-        Handles SQLite compatibility issues.
+        Runs simplified database migrations by scanning model files and creating corresponding tables in a SQLite database.
+        This method inspects Python model files in the project's 'models' directory, extracts table and column definitions,
+        and generates SQL statements to create any missing tables in the project's SQLite database. It also commits the updated
+        database file to Git if new tables are created.
+        Args:
+            project_dir (Path): The root directory of the project, containing the 'models' and 'storage/db' subdirectories.
+        Returns:
+            dict: A dictionary containing the migration results with the following keys:
+                - "success" (bool): Whether the migration process completed successfully.
+                - "database_path" (str or None): The path to the SQLite database file.
+                - "message" (str): A summary message about the migration process.
+                - "tables_created" (list): A list of table names that were created.
+                - "git_commit" (dict or None): Information about the Git commit, if applicable.
         """
-        alembic_ini = project_dir / "alembic.ini"
-        logger.info(f"Running migrations for {entity_name} in {project_dir}")
-        logger.info(f"Checking for alembic.ini at {alembic_ini}")
+        logger.info(f"Running simplified migrations in {project_dir}")
+        result = {
+            "success": False,
+            "database_path": None,
+            "message": "",
+            "tables_created": [],
+            "git_commit": None
+        }
         
-        # Check if alembic is set up
-        alembic_initialized = alembic_ini.exists()
-        
-        if not alembic_initialized:
-            logger.warning(f"alembic.ini not found in {project_dir}. Using template-based migration generation.")
-            # Fall back to template-based migration
-            return await self._generate_template_migration(project_dir, entity_name)
-        
-        logger.info(f"Found alembic.ini in {project_dir}. Running Alembic migrations.")
-        
-        # Create storage directory for SQLite database
+        # Set up directories with proper absolute paths
         storage_dir = project_dir / "storage" / "db"
         storage_dir.mkdir(exist_ok=True, parents=True)
         sqlite_path = storage_dir / "db.sqlite"
         
-        # Update database connection string in alembic.ini
+        logger.info(f"Storage directory: {storage_dir}")
+        logger.info(f"SQLite path: {sqlite_path}")
+        
+        # Make sure database connection works
         try:
-            ini_content = alembic_ini.read_text()
-            relative_path = str(sqlite_path.relative_to(project_dir)).replace("\\", "/")
+            import sqlite3
+            conn = sqlite3.connect(str(sqlite_path))
+            cursor = conn.cursor()
             
-            if "sqlalchemy.url = " in ini_content and "sqlite:///" not in ini_content:
-                new_content = re.sub(
-                    r"sqlalchemy\.url\s*=\s*.*", 
-                    f"sqlalchemy.url = sqlite:///{relative_path}",
-                    ini_content
-                )
-                alembic_ini.write_text(new_content)
-                logger.info(f"Updated database connection string in alembic.ini")
-            else:
-                logger.info(f"Using database path: sqlite:///{relative_path}")
-                logger.info("Database connection string already set or not found")
-        except Exception as e:
-            logger.warning(f"Could not update alembic.ini: {str(e)}")
-        
-        # Get existing migrations
-        versions_dir = project_dir / "alembic" / "versions"
-        versions_dir.mkdir(exist_ok=True, parents=True)
-        
-        try:
-            existing_migrations = list(versions_dir.glob("*.py"))
-            logger.info(f"Checking existing migrations in {versions_dir}")
-            logger.info(f"Found {len(existing_migrations)} existing migration files:")
+            # Get a list of existing tables
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            existing_tables = [table[0] for table in cursor.fetchall()]
+            logger.info(f"Existing tables: {existing_tables}")
             
-            for migration_file in existing_migrations:
-                try:
-                    content = migration_file.read_text()
-                    rev_match = re.search(r"revision\s*=\s*['\"]([^'\"]+)['\"]", content)
-                    rev_id = rev_match.group(1) if rev_match else "unknown"
-                    logger.info(f"  - {migration_file.name}: revision={rev_id}")
-                except Exception as e:
-                    logger.warning(f"  - {migration_file.name}: Error reading {str(e)}")
-        except Exception as e:
-            logger.warning(f"Error listing migrations: {str(e)}")
-        
-        # Skip Alembic autogenerate completely since it doesn't handle SQLite well
-        # Instead, always use our template-based approach which will be SQLite-compatible
-        logger.info(f"Using template-based migration for SQLite compatibility")
-        return await self._generate_template_migration(project_dir, entity_name)
-        
-    async def _generate_template_migration(self, project_dir: Path, entity_name: str):
-        """
-        Generate migration using template approach for SQLite compatibility.
-        """
-        logger.info(f"Using template-based migration generation for {entity_name}")
-        
-        # Create storage directory for SQLite database
-        storage_dir = project_dir / "storage" / "db"
-        storage_dir.mkdir(exist_ok=True, parents=True)
-        sqlite_path = storage_dir / "db.sqlite"
-        
-        # Create the versions directory if it doesn't exist
-        versions_dir = project_dir / "alembic" / "versions"
-        versions_dir.mkdir(exist_ok=True, parents=True)
-        
-        # Find migrations directly in the project directory
-        latest_migration_id = None
-        try:
-            # Explicitly list migrations in this project's versions directory
-            logger.info(f"Listing migrations directly from {versions_dir}")
-            migration_files = list(versions_dir.glob("*.py"))
-            
-            if migration_files:
-                # Extract revision info from each file
-                logger.info(f"Found {len(migration_files)} migration files:")
-                revision_ids = {}
+            # Now, scan the models directory to find new models
+            models_dir = project_dir / "models"
+            if models_dir.exists():
+                model_files = list(models_dir.glob("*.py"))
+                logger.info(f"Found {len(model_files)} model files")
                 
-                for migration_file in migration_files:
+                tables_created = []
+                
+                # For each model file, try to extract the table definition
+                for model_file in model_files:
+                    model_name = model_file.stem
+                    logger.info(f"Processing model: {model_name}")
+                    
+                    # Read the model file content
+                    model_content = model_file.read_text()
+                    
+                    # Try to extract table name from the model
+                    table_name_match = re.search(r"__tablename__\s*=\s*['\"]([^'\"]+)['\"]", model_content)
+                    if table_name_match:
+                        table_name = table_name_match.group(1)
+                    else:
+                        # If no explicit table name, use the snake_case model name + 's'
+                        snake_case = self._to_snake_case(model_name)
+                        table_name = f"{snake_case}s"
+                    
+                    # Check if this table already exists
+                    if table_name in existing_tables:
+                        logger.info(f"Table {table_name} already exists, skipping")
+                        continue
+                    
+                    # Try to extract the column definitions
                     try:
-                        content = migration_file.read_text()
-                        rev_match = re.search(r"revision\s*=\s*['\"]([^'\"]+)['\"]", content)
-                        if rev_match:
-                            rev_id = rev_match.group(1)
+                        # Analyze the model content to extract column definitions
+                        columns = []
+                        column_matches = re.finditer(r"(\w+)\s*=\s*Column\(([^)]+)\)", model_content)
+                        
+                        for match in column_matches:
+                            column_name = match.group(1)
+                            column_def = match.group(2)
+                            columns.append((column_name, column_def))
+                        
+                        # Generate a CREATE TABLE statement
+                        if columns:
+                            create_table_sql = f"CREATE TABLE IF NOT EXISTS {table_name} (\n"
                             
-                            # Get down_revision if available
-                            down_rev_match = re.search(r"down_revision\s*=\s*([^,\n]+)", content)
-                            down_rev = None
-                            if down_rev_match:
-                                down_rev_str = down_rev_match.group(1).strip()
-                                if down_rev_str not in ("None", "none", "''", '""'):
-                                    down_rev = down_rev_str.strip("'\"")
+                            sql_columns = []
+                            for col_name, col_def in columns:
+                                # Simplify SQLAlchemy type definitions to basic SQLite types
+                                sqlite_type = "TEXT"  # Default type
+                                
+                                if "Integer" in col_def:
+                                    sqlite_type = "INTEGER"
+                                elif "Float" in col_def:
+                                    sqlite_type = "REAL"
+                                elif "Boolean" in col_def:
+                                    sqlite_type = "BOOLEAN"
+                                elif "DateTime" in col_def:
+                                    sqlite_type = "TIMESTAMP"
+                                
+                                # Check for primary key
+                                is_primary = "primary_key=True" in col_def or "primary_key = True" in col_def
+                                primary_key = "PRIMARY KEY" if is_primary else ""
+                                
+                                # Check for nullable
+                                is_nullable = not ("nullable=False" in col_def or "nullable = False" in col_def)
+                                nullable = "" if is_nullable else "NOT NULL"
+                                
+                                # Column definition
+                                sql_col = f"    {col_name} {sqlite_type} {primary_key} {nullable}".strip()
+                                sql_columns.append(sql_col)
                             
-                            revision_ids[rev_id] = down_rev
-                            logger.info(f"  - {migration_file.name}: revision={rev_id}, down_revision={down_rev}")
+                            create_table_sql += ",\n".join(sql_columns)
+                            create_table_sql += "\n);"
+                            
+                            logger.info(f"Executing SQL: {create_table_sql}")
+                            
+                            # Execute the CREATE TABLE statement
+                            cursor.execute(create_table_sql)
+                            conn.commit()
+                            
+                            tables_created.append(table_name)
+                            logger.info(f"Created table: {table_name}")
+                            
                     except Exception as e:
-                        logger.warning(f"  - {migration_file.name}: Error reading {str(e)}")
+                        logger.error(f"Error creating table from model {model_name}: {str(e)}")
                 
-                # Find the head revisions (no other revision points to them)
-                if revision_ids:
-                    # All revisions
-                    all_revs = set(revision_ids.keys())
-                    # Revisions that are referenced as down_revisions
-                    child_revs = set(r for r in revision_ids.values() if r is not None)
-                    # Head revisions are those that are not down_revisions of any other revision
-                    head_revs = all_revs - child_revs
-                    
-                    if head_revs:
-                        logger.info(f"Found head revisions through direct parsing: {head_revs}")
-                        latest_migration_id = max(head_revs)
-                        logger.info(f"Using latest migration ID from direct parsing: {latest_migration_id}")
-        except Exception as e:
-            logger.warning(f"Error analyzing migrations: {str(e)}")
-
-        # Use default ID if none found
-        if not latest_migration_id:
-            # Check for initial migration
-            for migration_file in versions_dir.glob("*initial*.py"):
+                # Update result with tables created
+                result["tables_created"] = tables_created
+                if tables_created:
+                    result["message"] = f"Created {len(tables_created)} new tables: {', '.join(tables_created)}"
+                else:
+                    result["message"] = "No new tables needed to be created."
+            
+            conn.close()
+            result["success"] = True
+            result["database_path"] = str(sqlite_path)
+            # If we successfully updated the database, commit it to Git
+            if result["success"] and sqlite_path.exists():
                 try:
-                    content = migration_file.read_text()
-                    rev_match = re.search(r"revision\s*=\s*['\"]([^'\"]+)['\"]", content)
-                    if rev_match:
-                        latest_migration_id = rev_match.group(1)
-                        logger.info(f"Using initial migration ID: {latest_migration_id}")
-                        break
-                except Exception:
-                    pass
+                    # Get the project_id from the project_dir path
+                    project_id = project_dir.name
                     
-            # Default fallback
-            if not latest_migration_id:
-                latest_migration_id = "8b7c9d0e1f2a"  # Default ID
-                logger.info(f"Using default template migration ID: {latest_migration_id}")
+                    # Read the database as binary data
+                    with open(sqlite_path, 'rb') as f:
+                        sqlite_data = f.read()
+                    
+                    relative_path = str(sqlite_path.relative_to(project_dir))
+                    commit_message = f"Update SQLite database with new tables: {', '.join(tables_created)}"
+                    
+                    # Use the GitService to commit the binary file
+                    commit_result = await GitService.commit_binary_file_update(
+                        project_id=project_id,
+                        binary_content=sqlite_data,
+                        file_path=relative_path,
+                        commit_message=commit_message,
+                    )
+                    
+                    result["git_commit"] = {
+                        "success": True,
+                        "commit_id": commit_result,
+                        "message": commit_message
+                    }
+                    
+                    logger.info(f"Successfully committed updated database to Git with ID: {commit_result}")
+                    
+                except Exception as e:
+                    error_msg = f"Error committing database to Git: {str(e)}"
+                    logger.error(error_msg)
+                    result["git_commit"] = {
+                        "success": False,
+                        "error": error_msg
+                    }
+            
+        except Exception as e:
+            error_msg = f"Error during migration: {str(e)}"
+            logger.error(error_msg)
+            result["message"] = error_msg
+            return result
+        
+        logger.info(f"Migration process completed with success={result['success']}")
+        return result
+    
+    async def generate_migration(self, project_dir: Path, entity_name: str) -> dict:
+        """
+        Generates migration files for an entity without applying them.
+        This is separated from run_migrations to allow users to explicitly trigger migrations later.
+        
+        Returns:
+            dict: Dictionary containing migration files and component information
+        """
+        logger.info(f"Generating migration for {entity_name} in {project_dir}")
+        result = {
+            "migration_files": [],
+            "migration_component": None
+        }
+        
+        # Set up directories
+        versions_dir = project_dir / "alembic" / "versions"
+        versions_dir.mkdir(exist_ok=True, parents=True)
+        
+        # Find latest migration ID
+        latest_migration_id = self._find_latest_migration_id(project_dir, versions_dir)
         
         # Get model code for template context
         snake_case_entity = self._to_snake_case(entity_name)
@@ -542,12 +598,12 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
                 logger.info(f"Found model file: {model_file}")
             except Exception as e:
                 logger.warning(f"Could not read model file: {str(e)}")
-        
-        # Generate migration using the template manager
+
+        # Generate migration using template
+        logger.info(f"Generating migration with template using parent ID: {latest_migration_id}")
         try:
             from app.api.v1.services.langchain_service import LangchainService
             
-            logger.info(f"Generating migration with template using parent ID: {latest_migration_id}")
             migration_result = await LangchainService.generate_code_with_template(
                 template_name="migration",
                 language="python",
@@ -557,9 +613,12 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
             )
             
             migration_content = migration_result.get("generated_code", "")
-            
             if not migration_content:
                 raise ValueError("Failed to generate migration content from template")
+            
+            # Log the first few lines for debugging
+            first_lines = "\n".join(migration_content.split("\n")[:10])
+            logger.info(f"Generated migration content (first 10 lines):\n{first_lines}")
             
             # Fix PostgreSQL-specific types for SQLite
             migration_content = migration_content.replace(
@@ -571,67 +630,152 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
                 "sa.String()"
             )
             
-            # Fix empty string down_revision
+            # Fix empty down_revision or incorrect down_revision
             if "down_revision = ''" in migration_content or 'down_revision = ""' in migration_content:
                 migration_content = re.sub(
                     r"down_revision\s*=\s*['\"]?['\"]",
                     f"down_revision = '{latest_migration_id}'",
                     migration_content
                 )
-                logger.info(f"Fixed empty down_revision to use latest migration ID: {latest_migration_id}")
+                logger.info(f"Fixed empty down_revision to use {latest_migration_id}")
             
-            # Log a sample of the migration content
-            content_preview = migration_content.split("\n")[:10]
-            logger.info(f"Generated migration content (first 10 lines):\n{chr(10).join(content_preview)}")
+            # Make sure the migration references the correct parent
+            down_rev_pattern = r"down_revision\s*=\s*['\"]([^'\"]+)['\"]"
+            current_down_rev = re.search(down_rev_pattern, migration_content)
+            if current_down_rev and current_down_rev.group(1) != latest_migration_id:
+                migration_content = re.sub(
+                    down_rev_pattern,
+                    f"down_revision = '{latest_migration_id}'",
+                    migration_content
+                )
+                logger.info(f"Updated down_revision to use correct parent: {latest_migration_id}")
             
-            # Check if we already have a migration for this entity
-            existing_order_migration = False
+            # Check for existing migration for this entity
+            existing_migration = False
             for existing_file in versions_dir.glob("*.py"):
                 try:
                     content = existing_file.read_text()
                     if f"op.create_table('{snake_case_entity}s'" in content or f'op.create_table("{snake_case_entity}s"' in content:
-                        existing_order_migration = True
+                        existing_migration = True
                         logger.info(f"Found existing migration for {entity_name} at {existing_file}")
                         break
                 except Exception:
                     pass
             
-            if not existing_order_migration:
+            if not existing_migration:
                 # Write the migration file
                 migration_file = versions_dir / f"create_{snake_case_entity}_table.py"
                 logger.info(f"Creating migration file: {migration_file}")
                 with open(migration_file, 'w') as f:
                     f.write(migration_content)
                 
-                # Try to apply the migration if alembic.ini exists
-                if (project_dir / "alembic.ini").exists():
-                    try:
-                        logger.info("Applying template-generated migration")
-                        result = subprocess.run(
-                            ["alembic", "upgrade", "head"], 
-                            cwd=project_dir, 
-                            check=False,
-                            capture_output=True,
-                            text=True
-                        )
-                        if result.returncode == 0:
-                            logger.info(f"Successfully applied template migration: {result.stdout}")
-                        else:
-                            logger.warning(f"Could not apply template migration: {result.stderr}")
-                    except Exception as apply_error:
-                        logger.warning(f"Could not apply template-generated migration: {str(apply_error)}")
-            
+                # Add to result
+                from app.api.v1.services.langchain_service import LangchainService
+                migration_file_info = {
+                    "file_path": str(migration_file.relative_to(project_dir)),
+                    "generated_code": migration_content,
+                    "content_base64": LangchainService.encode_content(migration_content),
+                    "file_hash": LangchainService.generate_file_hash(migration_content)
+                }
+                result["migration_files"].append(migration_file_info)
+                
+                # Create migration component info
+                result["migration_component"] = {
+                    "file_path": str(migration_file.relative_to(project_dir)),
+                    "generated_code": migration_content,
+                    "content_base64": LangchainService.encode_content(migration_content),
+                    "file_hash": LangchainService.generate_file_hash(migration_content),
+                    "entity_name": entity_name
+                }
+            else:
+                logger.info(f"Skipping migration creation as it already exists for {entity_name}")
+                
         except Exception as e:
-            logger.error(f"Error generating template-based migration: {str(e)}")
-        
-        # Create an empty SQLite database if it doesn't exist
-        if not sqlite_path.exists():
-            try:
-                import sqlite3
-                conn = sqlite3.connect(str(sqlite_path))
-                conn.close()
-                logger.info(f"Created empty SQLite database at {sqlite_path}")
-            except Exception as db_error:
-                logger.error(f"Error creating empty SQLite database: {str(db_error)}")
-        
-        return sqlite_path
+            logger.error(f"Error generating migration: {str(e)}")
+            
+        return result
+
+    def _find_latest_migration_id(self, project_dir: Path, versions_dir: Path) -> str:
+        """
+        Determines the latest Alembic migration ID for a given project.
+        This method attempts to find the most recent migration revision by:
+          1. Parsing all migration files in the specified versions directory to identify head revisions.
+          2. If no head revision is found in the files, querying the project's SQLite database for the current Alembic version.
+          3. If neither approach yields a result, returning a default migration ID.
+        Args:
+            project_dir (Path): The root directory of the project, used to locate the SQLite database.
+            versions_dir (Path): The directory containing Alembic migration files.
+        Returns:
+            str: The latest migration ID, either determined from migration files, the database, or a default value.
+        """
+        latest_migration_id = None
+        try:
+            # Find the latest migration ID from existing files
+            migration_files = list(versions_dir.glob("*.py"))
+            
+            if migration_files:
+                logger.info(f"Listing migrations directly from {versions_dir}")
+                logger.info(f"Found {len(migration_files)} migration files:")
+                
+                revision_ids = {}
+                for migration_file in migration_files:
+                    try:
+                        content = migration_file.read_text()
+                        rev_match = re.search(r"revision\s*=\s*['\"]([^'\"]+)['\"]", content)
+                        if rev_match:
+                            rev_id = rev_match.group(1)
+                            down_rev_match = re.search(r"down_revision\s*=\s*([^,\n]+)", content)
+                            down_rev = None
+                            if down_rev_match:
+                                down_rev_str = down_rev_match.group(1).strip()
+                                if down_rev_str not in ("None", "none", "''", '""'):
+                                    down_rev = down_rev_str.strip("'\"")
+                            revision_ids[rev_id] = down_rev
+                            logger.info(f"  - {migration_file.name}: revision={rev_id}, down_revision={down_rev}")
+                    except Exception as e:
+                        logger.warning(f"Error reading migration {migration_file}: {str(e)}")
+                
+                # Find head revisions
+                if revision_ids:
+                    all_revs = set(revision_ids.keys())
+                    child_revs = set(r for r in revision_ids.values() if r is not None)
+                    head_revs = all_revs - child_revs
+                    
+                    if head_revs:
+                        latest_migration_id = list(head_revs)[0]  # Just take the first one if multiple heads
+                        logger.info(f"Found head revisions through direct parsing: {head_revs}")
+                        logger.info(f"Using latest migration ID from direct parsing: {latest_migration_id}")
+            
+            if not latest_migration_id:
+                # Try to get it from the database if it exists
+                sqlite_path = project_dir / "storage" / "db" / "db.sqlite"
+                if sqlite_path.exists():
+                    try:
+                        import sqlite3
+                        conn = sqlite3.connect(str(sqlite_path))
+                        cursor = conn.cursor()
+                        
+                        # Check if alembic_version table exists
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version';")
+                        has_alembic_table = cursor.fetchone() is not None
+                        
+                        if has_alembic_table:
+                            cursor.execute("SELECT version_num FROM alembic_version;")
+                            version_row = cursor.fetchone()
+                            if version_row:
+                                latest_migration_id = version_row[0]
+                                logger.info(f"Using current database version as latest: {latest_migration_id}")
+                        
+                        conn.close()
+                    except Exception as e:
+                        logger.warning(f"Error checking database version: {str(e)}")
+            
+            if not latest_migration_id:
+                # If still no head found, use a default
+                latest_migration_id = "e77b933ce306"  # Use a default ID
+                logger.info(f"No head revisions found, using default ID: {latest_migration_id}")
+        except Exception as e:
+            logger.warning(f"Error finding latest migration ID: {str(e)}")
+            latest_migration_id = "e77b933ce306"  # Use a default ID
+            
+        return latest_migration_id

@@ -1,15 +1,19 @@
 import logging
+
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
 
-from app.api.v1.services.project_db import GetProjectDatabases
 from app.api.v1.schemas.project_db import (
-    DBFileResponse, DBFileListSuccessResponse,
-    DBTableResponse, DBTableListSuccessResponse,
-    TableRowsSuccessResponse, FullDBViewResponse
+    DBFileListSuccessResponse,
+    DBFileResponse,
+    DBTableListSuccessResponse,
+    DBTableResponse,
+    FullDBViewResponse,
+    TableRowsSuccessResponse,
 )
-from app.api.v1.utils.success_response import success_response
+from app.api.v1.services.project_db import GetProjectDatabases
 from app.api.v1.utils.error_response import error_response
+from app.api.v1.utils.success_response import success_response
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["database"])
@@ -42,7 +46,10 @@ async def list_database_files(project_id: str):
         )
 
 
-@router.get("/projects/{project_id}/db/{db_filename}/tables", response_model=DBTableListSuccessResponse)
+@router.get(
+    "/projects/{project_id}/db/{db_filename}/tables",
+    response_model=DBTableListSuccessResponse,
+)
 async def list_tables_in_db(project_id: str, db_filename: str):
     """
     Get all table names from a specific .sqlite3 file.
@@ -68,16 +75,21 @@ async def list_tables_in_db(project_id: str, db_filename: str):
             detail=str(e),
         )
 
+
 @router.get(
     "/projects/{project_id}/db/{db_filename}/tables/{table_name}/rows",
-    response_model=TableRowsSuccessResponse
+    response_model=TableRowsSuccessResponse,
 )
-async def get_table_rows(project_id: str, db_filename: str, table_name: str, limit: int = 50):
+async def get_table_rows(
+    project_id: str, db_filename: str, table_name: str, limit: int = 50
+):
     """
     Get row contents of a table in a .sqlite3 DB.
     """
     try:
-        rows = await GetProjectDatabases.get_table_rows(project_id, db_filename, table_name, limit)
+        rows = await GetProjectDatabases.get_table_rows(
+            project_id, db_filename, table_name, limit
+        )
 
         if isinstance(rows, JSONResponse):
             return rows
@@ -94,6 +106,7 @@ async def get_table_rows(project_id: str, db_filename: str, table_name: str, lim
             message="Failed to fetch table rows",
             detail=str(e),
         )
+
 
 @router.get("/projects/{project_id}/db/full-view", response_model=FullDBViewResponse)
 async def get_full_db_view(project_id: str, row_limit: int = 10):

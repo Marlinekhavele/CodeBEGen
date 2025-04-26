@@ -1,11 +1,12 @@
 import base64
+import logging
 import sqlite3
 import tempfile
-import requests
-import logging
 
+import requests
 from fastapi import status
 from fastapi.responses import JSONResponse
+
 from app.api.v1.utils.error_response import error_response
 from config import settings
 
@@ -20,7 +21,7 @@ class GetProjectDatabases:
         Args:
             project_id (str): The unique identifier of the project whose DB files are to be listed.
         Returns:
-            list[dict] or Response: 
+            list[dict] or Response:
                 - On success: A list of dictionaries, each containing the 'name' and 'path' of a SQLite database file (.sqlite or .sqlite3) found in the directory.
                 - On failure: An error response with appropriate status code and message.
         Raises:
@@ -29,7 +30,7 @@ class GetProjectDatabases:
             - Uses the Gitea API to fetch the contents of the 'storage/db' directory.
             - Handles cases where the directory does not exist or the API request fails.
         """
-        
+
         try:
             url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/storage/db"
             response = requests.get(url)
@@ -50,12 +51,13 @@ class GetProjectDatabases:
 
             contents = response.json()
             db_files = [
-                {
-                    "name": item["name"],
-                    "path": item["path"]
-                }
+                {"name": item["name"], "path": item["path"]}
                 for item in contents
-                if item["type"] == "file" and (item["name"].endswith(".sqlite") or item["name"].endswith(".sqlite3"))
+                if item["type"] == "file"
+                and (
+                    item["name"].endswith(".sqlite")
+                    or item["name"].endswith(".sqlite3")
+                )
             ]
 
             return db_files
@@ -87,7 +89,7 @@ class GetProjectDatabases:
             - The file content is expected to be base64 encoded.
             - The database is temporarily written to disk for inspection.
         """
-        
+
         try:
             file_url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/storage/db/{db_filename}"
             response = requests.get(file_url)
@@ -128,8 +130,11 @@ class GetProjectDatabases:
                 message="Failed to read DB tables",
                 detail=str(e),
             )
+
     @staticmethod
-    async def get_table_rows(project_id: str, db_filename: str, table_name: str, limit: int = 50):
+    async def get_table_rows(
+        project_id: str, db_filename: str, table_name: str, limit: int = 50
+    ):
         """
         Fetches rows from a specified table in a SQLite database file stored in a remote Gitea repository.
         This asynchronous function downloads the database file from the Gitea API, decodes it, and queries the specified table for a limited number of rows. The results are returned as a list of dictionaries, where each dictionary represents a row with column names as keys.
@@ -145,7 +150,6 @@ class GetProjectDatabases:
         Raises:
             Exception: If there is an error reading the table rows or fetching the database file.
         """
-        
 
         try:
             file_url = f"{settings.GITEA_API_URL}/repos/CodeBeGen/{project_id}/contents/storage/db/{db_filename}"
@@ -198,20 +202,20 @@ class GetProjectDatabases:
     @staticmethod
     async def get_full_db_view(project_id: str, row_limit: int = 10):
         """
-        Asynchronously retrieves a comprehensive view of all databases associated with a given project, 
+        Asynchronously retrieves a comprehensive view of all databases associated with a given project,
         including their tables and a limited number of rows from each table.
         Args:
             project_id (str): The unique identifier of the project whose databases are to be viewed.
             row_limit (int, optional): The maximum number of rows to retrieve from each table. Defaults to 10.
         Returns:
-            list: A list of dictionaries, each representing a database file with its name, path, 
+            list: A list of dictionaries, each representing a database file with its name, path,
                   and a list of tables (each containing the table name and its rows).
-            JSONResponse: If an error occurs or if the project databases/tables cannot be retrieved, 
+            JSONResponse: If an error occurs or if the project databases/tables cannot be retrieved,
                           returns a JSONResponse with the appropriate error message.
         Raises:
             Exception: Logs and returns an error response if any unexpected exception occurs during processing.
         """
-        
+
         try:
             db_files = await GetProjectDatabases.list_db_files(project_id)
             if isinstance(db_files, JSONResponse):
@@ -221,7 +225,9 @@ class GetProjectDatabases:
 
             for db_file in db_files:
                 db_filename = db_file["name"]
-                tables = await GetProjectDatabases.get_tables_in_db(project_id, db_filename)
+                tables = await GetProjectDatabases.get_tables_in_db(
+                    project_id, db_filename
+                )
 
                 if isinstance(tables, JSONResponse):
                     tables = []
@@ -229,20 +235,21 @@ class GetProjectDatabases:
                 tables_data = []
 
                 for table_name in tables:
-                    rows = await GetProjectDatabases.get_table_rows(project_id, db_filename, table_name, row_limit)
+                    rows = await GetProjectDatabases.get_table_rows(
+                        project_id, db_filename, table_name, row_limit
+                    )
                     if isinstance(rows, JSONResponse):
                         rows = []
 
-                    tables_data.append({
-                        "name": table_name,
-                        "rows": rows
-                    })
+                    tables_data.append({"name": table_name, "rows": rows})
 
-                result.append({
-                    "db_file": db_filename,
-                    "path": db_file["path"],
-                    "tables": tables_data
-                })
+                result.append(
+                    {
+                        "db_file": db_filename,
+                        "path": db_file["path"],
+                        "tables": tables_data,
+                    }
+                )
 
             return result
 

@@ -192,7 +192,10 @@ class GitService:
 
     @staticmethod
     async def commit_binary_file_update(
-        project_id: str, binary_content: bytes, file_path: str, commit_message: str = None
+        project_id: str,
+        binary_content: bytes,
+        file_path: str,
+        commit_message: str = None,
     ) -> str:
         """
         Commit a binary file to the project repository and return the new commit hash.

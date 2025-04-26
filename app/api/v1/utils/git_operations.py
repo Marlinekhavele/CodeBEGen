@@ -93,7 +93,7 @@ def clone_template_repo(project_dir, language):
         src_file = template_dir / file_name
         if src_file.exists():
             shutil.copy(src_file, project_dir / file_name)
-            
+
     # Copy .gitignore if it exists in the template
     gitignore_src = template_dir / ".gitignore"
     if gitignore_src.exists():
@@ -101,7 +101,8 @@ def clone_template_repo(project_dir, language):
     else:
         # Create default .gitignore if none exists in template
         with open(project_dir / ".gitignore", "w") as f:
-            f.write("""# Byte-compiled / optimized / DLL files
+            f.write(
+                """# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -126,7 +127,8 @@ env/
 
 # Keep all migrations
 !alembic/versions/*.py
-""")
+"""
+            )
 
     # Initialize git
     run_git_command(["git", "init"], cwd=project_dir)

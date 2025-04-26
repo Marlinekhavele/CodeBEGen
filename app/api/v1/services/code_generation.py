@@ -1,8 +1,6 @@
 import base64
 import hashlib
 import logging
-import re
-import subprocess
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Optional
 
@@ -136,8 +134,8 @@ class CodeGenerationService:
             "utils": self.on_helpers_complete,
             "migration": self.on_migration_complete,
             "route": self.on_endpoint_complete,
-            "dockerfile": self.on_dockerfile_complete,  
-            "api_docs": self.on_api_docs_complete,  
+            "dockerfile": self.on_dockerfile_complete,
+            "api_docs": self.on_api_docs_complete,
         }
 
         # Add non-None callbacks to component callbacks
@@ -735,7 +733,9 @@ class CodeGenerationService:
         required_components = language_template.get_required_components()
         endpoint_component = language_template.get_component_map().get("endpoint")
         if endpoint_component is None:
-            raise ValueError("Language template does not define an 'endpoint' component.")
+            raise ValueError(
+                "Language template does not define an 'endpoint' component."
+            )
 
         # Keep track of generated code for dependencies
         generated_code = {
@@ -747,7 +747,7 @@ class CodeGenerationService:
         # Generate each required component
         for component_type in required_components:
             # Skip the primary component as we've already generated it
-            if component_type == endpoint_component  or component_type == "migration":
+            if component_type == endpoint_component or component_type == "migration":
                 continue
 
             await self._notify_info(f"Generating {component_type} for {entity_name}")
@@ -775,7 +775,9 @@ class CodeGenerationService:
 
         # Now handle migrations separately using the appropriate method for the language
         if "migration" in required_components:
-            await self._generate_migration(project_id, entity_name, result, language_template)
+            await self._generate_migration(
+                project_id, entity_name, result, language_template
+            )
 
     async def _generate_component(
         self,
@@ -832,12 +834,14 @@ class CodeGenerationService:
             logger.error(f"Error generating {component_type}: {str(e)}", exc_info=True)
             raise
 
-    async def _generate_migration(self, project_id: str, entity_name: str, result: dict, language_template):
+    async def _generate_migration(
+        self, project_id: str, entity_name: str, result: dict, language_template
+    ):
         """
         Generates migration files without applying them to the database.
         This function delegates the migration generation to the language_template.generate_migration method,
         and takes care of tracking the resulting files for Git commits.
-        
+
         Args:
             project_id (str): The unique identifier of the project.
             entity_name (str): The name of the entity/model for which migrations are to be generated.
@@ -851,25 +855,30 @@ class CodeGenerationService:
 
         repo_url = get_repo_url(project_id)
         project_dir = get_project_dir_from_repo_url(repo_url)
-        
+
         try:
-            # Notify that migration generation is starting 
+            # Notify that migration generation is starting
             migration_data = {"entity_name": entity_name, "component_type": "migration"}
             await self._notify_event("start", "migration", migration_data)
             await self._notify_info(f"Starting migration generation for {entity_name}")
-            
+
             # Generate migrations using the language template's generate_migration method
-            migration_result = await language_template.generate_migration(project_dir=project_dir, entity_name=entity_name)
-            
+            migration_result = await language_template.generate_migration(
+                project_dir=project_dir, entity_name=entity_name
+            )
+
             # Add the generated migration files to the result for tracking
             if migration_result and isinstance(migration_result, dict):
                 # The template might return information we can use directly
                 if "migration_files" in migration_result:
                     for file_info in migration_result["migration_files"]:
                         result.setdefault("files_to_commit", []).append(file_info)
-                
+
                 # If the template returned migration component information
-                if "migration_component" in migration_result and migration_result["migration_component"]:
+                if (
+                    "migration_component" in migration_result
+                    and migration_result["migration_component"]
+                ):
                     result["migration"] = migration_result["migration_component"]
 
                     # Ensure we have all required fields in the migration component
@@ -879,51 +888,71 @@ class CodeGenerationService:
                     # If no structured component was returned, we need to find migration files ourselves
                     versions_dir = project_dir / "alembic" / "versions"
                     if versions_dir.exists():
-                        await self._add_migration_files_to_results(project_dir, versions_dir, result)
-                        
+                        await self._add_migration_files_to_results(
+                            project_dir, versions_dir, result
+                        )
+
                         # If we found migration files but still don't have a migration component, create one
                         if "migration" not in result and "files_to_commit" in result:
                             for file_info in result["files_to_commit"]:
-                                if file_info.get("file_path", "").startswith("alembic/versions/"):
+                                if file_info.get("file_path", "").startswith(
+                                    "alembic/versions/"
+                                ):
                                     result["migration"] = {
                                         "file_path": file_info["file_path"],
-                                        "generated_code": file_info.get("generated_code", ""),
-                                        "content_base64": file_info.get("content_base64", ""),
+                                        "generated_code": file_info.get(
+                                            "generated_code", ""
+                                        ),
+                                        "content_base64": file_info.get(
+                                            "content_base64", ""
+                                        ),
                                         "file_hash": file_info.get("file_hash", ""),
-                                        "entity_name": entity_name
+                                        "entity_name": entity_name,
                                     }
-                                    break        
+                                    break
             else:
                 # If no structured result was returned, we need to find migration files ourselves
                 versions_dir = project_dir / "alembic" / "versions"
                 if versions_dir.exists():
-                    await self._add_migration_files_to_results(project_dir, versions_dir, result)
-            
+                    await self._add_migration_files_to_results(
+                        project_dir, versions_dir, result
+                    )
+
             # Check for the database directory and ensure it exists
             storage_dir = project_dir / "storage" / "db"
             storage_dir.mkdir(exist_ok=True, parents=True)
-            
+
             # Create a .gitkeep file to ensure Git tracks the directory
             gitkeep_path = storage_dir / ".gitkeep"
             try:
-                with open(gitkeep_path, 'w') as f:
-                    f.write("# This file ensures Git tracks this directory even when empty")
-                
+                with open(gitkeep_path, "w") as f:
+                    f.write(
+                        "# This file ensures Git tracks this directory even when empty"
+                    )
+
                 # Add .gitkeep to files_to_commit
-                result.setdefault("files_to_commit", []).append({
-                    "file_path": str(gitkeep_path.relative_to(project_dir)),
-                    "generated_code": "# This file ensures Git tracks this directory even when empty",
-                    "content_base64": LangchainService.encode_content("# This file ensures Git tracks this directory even when empty"),
-                    "file_hash": LangchainService.generate_file_hash("# This file ensures Git tracks this directory even when empty")
-                })
+                result.setdefault("files_to_commit", []).append(
+                    {
+                        "file_path": str(gitkeep_path.relative_to(project_dir)),
+                        "generated_code": "# This file ensures Git tracks this directory even when empty",
+                        "content_base64": LangchainService.encode_content(
+                            "# This file ensures Git tracks this directory even when empty"
+                        ),
+                        "file_hash": LangchainService.generate_file_hash(
+                            "# This file ensures Git tracks this directory even when empty"
+                        ),
+                    }
+                )
             except Exception as e:
                 logger.error(f"Error creating .gitkeep file: {str(e)}")
                 await self._notify_info(f"Failed to create .gitkeep file: {str(e)}")
-            
-            # Notify that migration generation is complete 
-            migration_data = result.get("migration", {"entity_name": entity_name, "component_type": "migration"})
+
+            # Notify that migration generation is complete
+            migration_data = result.get(
+                "migration", {"entity_name": entity_name, "component_type": "migration"}
+            )
             await self._notify_event("complete", "migration", migration_data)
-            
+
         except Exception as e:
             error_msg = f"Error in migration generation: {str(e)}"
             logger.error(error_msg, exc_info=True)
@@ -931,57 +960,74 @@ class CodeGenerationService:
 
         return result
 
-    async def _add_migration_files_to_results(self, project_dir: Path, versions_dir: Path, result: dict):
+    async def _add_migration_files_to_results(
+        self, project_dir: Path, versions_dir: Path, result: dict
+    ):
         """Helper method to add migration files to the results for Git commits"""
         for migration_file in versions_dir.glob("*.py"):
             if str(migration_file).endswith("__pycache__"):
                 continue
-                
+
             try:
                 file_path = str(migration_file.relative_to(project_dir))
                 migration_content = migration_file.read_text(encoding="utf-8")
-                
-                # Check if we already have this file in the result
-                if "migration" in result and result["migration"].get("file_path") == file_path:
-                    continue
-                
-                # Add file to commit list
-                result.setdefault("files_to_commit", []).append({
-                    "file_path": file_path,
-                    "generated_code": migration_content,
-                    "content_base64": LangchainService.encode_content(migration_content),
-                    "file_hash": LangchainService.generate_file_hash(migration_content)
-                })
-            except Exception as file_error:
-                logger.error(f"Error reading migration file {migration_file}: {str(file_error)}")
 
-    async def _add_db_to_results(self, project_dir: Path, sqlite_path: Path, result: dict, entity_name: str):
+                # Check if we already have this file in the result
+                if (
+                    "migration" in result
+                    and result["migration"].get("file_path") == file_path
+                ):
+                    continue
+
+                # Add file to commit list
+                result.setdefault("files_to_commit", []).append(
+                    {
+                        "file_path": file_path,
+                        "generated_code": migration_content,
+                        "content_base64": LangchainService.encode_content(
+                            migration_content
+                        ),
+                        "file_hash": LangchainService.generate_file_hash(
+                            migration_content
+                        ),
+                    }
+                )
+            except Exception as file_error:
+                logger.error(
+                    f"Error reading migration file {migration_file}: {str(file_error)}"
+                )
+
+    async def _add_db_to_results(
+        self, project_dir: Path, sqlite_path: Path, result: dict, entity_name: str
+    ):
         """Helper method to add the database file to results for Git commits"""
         try:
             sqlite_db_path = str(sqlite_path.relative_to(project_dir))
-            
+
             # Read the database file
-            with open(sqlite_path, 'rb') as f:
+            with open(sqlite_path, "rb") as f:
                 sqlite_data = f.read()
-            
+
             # Add a explicit database component to the result
             result["database"] = {
                 "file_path": sqlite_db_path,
                 "is_binary": True,
                 "generated_code": sqlite_data,
-                "content_base64": base64.b64encode(sqlite_data).decode('utf-8'),
-                "file_hash": hashlib.md5(sqlite_data).hexdigest()
+                "content_base64": base64.b64encode(sqlite_data).decode("utf-8"),
+                "file_hash": hashlib.md5(sqlite_data).hexdigest(),
             }
-            
+
             # Also add to files_to_commit for consistency
-            result.setdefault("files_to_commit", []).append({
-                "file_path": sqlite_db_path,
-                "is_binary": True,
-                "generated_code": sqlite_data,
-                "content_base64": base64.b64encode(sqlite_data).decode('utf-8'),
-                "file_hash": hashlib.md5(sqlite_data).hexdigest()
-            })
-            
+            result.setdefault("files_to_commit", []).append(
+                {
+                    "file_path": sqlite_db_path,
+                    "is_binary": True,
+                    "generated_code": sqlite_data,
+                    "content_base64": base64.b64encode(sqlite_data).decode("utf-8"),
+                    "file_hash": hashlib.md5(sqlite_data).hexdigest(),
+                }
+            )
+
             await self._notify_info("Added SQLite database file to result")
         except Exception as db_error:
             logger.error(f"Error including SQLite database in result: {str(db_error)}")
@@ -1079,37 +1125,44 @@ class CodeGenerationService:
         if "files_to_commit" in generation_result:
             files_to_commit = generation_result.get("files_to_commit", [])
             logger.info(f"Found {len(files_to_commit)} additional files to commit")
-            
+
             # Process files_to_commit first - especially for database files
             for file_info in files_to_commit:
                 file_path = file_info.get("file_path")
                 if not file_path:
                     continue
-                    
+
                 # Check if this is a database file
                 is_database = "storage/db/db.sqlite" in file_path
                 is_binary = file_info.get("is_binary", False)
-                
+
                 if is_database:
                     logger.info(f"Processing database file: {file_path}")
                     try:
-                        commit_message = commit_messages.get("database", f"Add SQLite database for {entity_name}")
-                        
+                        commit_message = commit_messages.get(
+                            "database", f"Add SQLite database for {entity_name}"
+                        )
+
                         # For binary files, use the binary commit method
                         if is_binary:
-                            # Get the binary content 
+                            # Get the binary content
                             binary_content = file_info.get("generated_code")
                             if not isinstance(binary_content, bytes):
                                 # If it's not already bytes, try to convert it
                                 if isinstance(binary_content, str):
                                     # It might be base64 encoded
                                     import base64
+
                                     try:
-                                        binary_content = base64.b64decode(binary_content)
-                                    except:
-                                        # If not base64, encode as UTF-8
-                                        binary_content = binary_content.encode('utf-8')
-                            
+                                        binary_content = base64.b64decode(
+                                            binary_content
+                                        )
+                                    except Exception as e:
+                                        logger.debug(
+                                            f"Failed to decode as base64: {str(e)}. Encoding as UTF-8 instead."
+                                        )
+                                        binary_content = binary_content.encode("utf-8")
+
                             # Use the binary commit method
                             commit_result = await GitService.commit_binary_file_update(
                                 project_id=project_id,
@@ -1118,23 +1171,25 @@ class CodeGenerationService:
                                 commit_message=commit_message,
                             )
                         else:
-                            # Regular file commit 
+                            # Regular file commit
                             commit_result = await GitService.commit_file_update(
                                 project_id=project_id,
                                 new_code=file_info.get("generated_code", ""),
                                 file_path=file_path,
                                 commit_message=commit_message,
                             )
-                        
+
                         # Store the result
                         git_results["database"] = commit_result
                         logger.info(f"Committed database file: {file_path}")
-                        
+
                         # Mark as committed to avoid duplicate commits
                         file_info["already_committed"] = True
-                    
+
                     except Exception as e:
-                        logger.error(f"Failed to commit database file: {str(e)}", exc_info=True)
+                        logger.error(
+                            f"Failed to commit database file: {str(e)}", exc_info=True
+                        )
 
         # Check specifically if dockerfile and api_docs are in the result
         logger.info(f"Dockerfile in result: {'dockerfile' in generation_result}")

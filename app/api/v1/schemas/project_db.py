@@ -1,4 +1,5 @@
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 from pydantic import BaseModel
 
 
@@ -24,11 +25,13 @@ class DBTableListSuccessResponse(BaseModel):
     message: str
     data: List[DBTableResponse]
 
+
 class TableRowsSuccessResponse(BaseModel):
     status_code: int
     success: bool
     message: str
     data: List[Dict[str, Any]]
+
 
 class TableData(BaseModel):
     name: str

@@ -9,6 +9,7 @@ from app.api.v1.routes.http_methods_test_endpoint import (
 from app.api.v1.routes.project_db import router as get_project_db_router
 from app.api.v1.routes.project_db_migration import router as project_db_migration_router
 from app.api.v1.routes.project_helpers import router as get_project_helpers_router
+from app.api.v1.routes.project_migrations import router as project_migrations_router
 from app.api.v1.routes.project_models import router as get_project_models_router
 from app.api.v1.routes.project_schemas import router as get_project_schemas_router
 from app.api.v1.routes.projects import router as project_router
@@ -23,6 +24,8 @@ router.include_router(get_all_endpoints_router)
 router.include_router(get_project_models_router)
 router.include_router(get_project_schemas_router)
 router.include_router(get_project_helpers_router)
+router.include_router(get_project_docs_router)
+router.include_router(project_migrations_router)
 router.include_router(http_methods_test_endpoint_router)
 router.include_router(get_project_db_router)
 router.include_router(project_db_migration_router)

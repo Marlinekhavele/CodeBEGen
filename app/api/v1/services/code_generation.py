@@ -179,7 +179,14 @@ class CodeGenerationService:
             language_template = LanguageTemplateFactory.get_template(language)
 
             # --- Extract entity name from prompt before generating components ---
-            entity_name = language_template.extract_entity_from_prompt(prompt)
+            # Try to derive a meaningful entity name from the prompt or endpoint path
+            initial_entity_name = self._derive_entity_name(
+                prompt, endpoint_path, language_template
+            )
+            logger.info(f"Initially derived entity name: {initial_entity_name}")
+
+            # Start with the initial entity name
+            entity_name = initial_entity_name
 
             # Log generation start
             logger.info(f"Generating code in {language} for: {prompt}")
@@ -191,7 +198,7 @@ class CodeGenerationService:
             primary_component = await self._generate_primary_component(
                 language_template,
                 project_id,
-                entity_name,  # Pass the unified entity name
+                entity_name,  # Pass the initial entity name
                 prompt,
                 method,
                 endpoint_path,
@@ -203,19 +210,50 @@ class CodeGenerationService:
                 primary_component.get("generated_code", "")
             )
 
-            # Step 3: Extract entity name
-            entity_name = self._extract_entity_name(
-                language_template, primary_component
+            # Step 3: Extract entity name from generated code to confirm/refine it
+            extracted_entity = language_template.extract_entity_from_code(
+                primary_component.get("generated_code", "")
             )
-            primary_component["entity_name"] = entity_name
 
-            # Update file path with correct entity name
+            # If we found a valid entity name in the code and it's different from our initial guess,
+            # update our entity name and adjust the component paths
+            if extracted_entity and extracted_entity != entity_name:
+                logger.info(f"Extracted entity name from code: {extracted_entity}")
+
+                # Store the old entity name before updating
+                old_entity_name = entity_name
+
+                # Update to the new entity name
+                entity_name = self._ensure_pascal_case(extracted_entity)
+                logger.info(f"Final unified entity name: {entity_name}")
+
+                # IMPORTANT: Update the primary component's file path to use the new entity name
+                component_type = language_template.get_component_map().get("endpoint")
+                new_file_path = language_template.get_component_paths(
+                    project_id, entity_name, method=method, endpoint_path=endpoint_path
+                )[component_type]
+
+                # Update the primary component with the new entity name and file path
+                primary_component["entity_name"] = entity_name
+
+                # Log the file path change for debugging
+                logger.info(
+                    f"Updating endpoint file path from {primary_component['file_path']} to {new_file_path}"
+                )
+                primary_component["file_path"] = new_file_path
+
+                # Also update the code content to replace old entity name references
+                primary_component = await self._update_component_with_unified_entity(
+                    primary_component, old_entity_name, entity_name, language_template
+                )
+            else:
+                # If no entity was extracted or it matches our initial guess, ensure it's in proper format
+                entity_name = self._ensure_pascal_case(entity_name)
+                logger.info(f"Final unified entity name: {entity_name}")
+                primary_component["entity_name"] = entity_name
+
+            # Step 4: Initialize result dictionary with updated primary component
             component_type = language_template.get_component_map().get("endpoint")
-            primary_component["file_path"] = language_template.get_component_paths(
-                project_id, entity_name, method=method, endpoint_path=endpoint_path
-            )[component_type]
-
-            # Step 4: Initialize result dictionary
             result = self._initialize_result_dictionary(
                 primary_component,
                 language_template,
@@ -245,7 +283,7 @@ class CodeGenerationService:
                         language_template,
                     )
                 else:
-                    # Generate new components
+                    # Generate new components using the unified entity name
                     await self._generate_new_components(
                         result,
                         language_template,
@@ -291,16 +329,23 @@ class CodeGenerationService:
                 )
                 api_docs_content = await self._generate_api_docs(
                     project_id,
-                    entity_name,
+                    entity_name,  # Use the unified entity name
                     method,
                     endpoint_path,
                     result["endpoint"].get("generated_code", ""),
                 )
+
+                # Generate file path using the language template for consistency
+                api_docs_path = (
+                    f"docs/{language_template._to_snake_case(entity_name)}.md"
+                )
+
                 result["api_docs"] = {
-                    "file_path": "docs/api.md",
+                    "file_path": api_docs_path,
                     "generated_code": api_docs_content,
                     "content_base64": LangchainService.encode_content(api_docs_content),
                     "file_hash": LangchainService.generate_file_hash(api_docs_content),
+                    "entity_name": entity_name,  # Include the entity name in the metadata
                 }
                 await self._notify_event("complete", "api_docs", result["api_docs"])
                 logger.info("Generated API documentation successfully")
@@ -308,7 +353,6 @@ class CodeGenerationService:
                 error_msg = f"Error generating API documentation: {str(e)}"
                 logger.error(error_msg, exc_info=True)
                 await self._notify_info(error_msg)
-
             # Step 8: Commit files to Git
             git_results = await self._commit_files_to_git(
                 project_id, result, language, language_template
@@ -345,35 +389,51 @@ class CodeGenerationService:
         endpoint_code: str,
     ) -> str:
         """
-        Generate API documentation in Markdown format using a template.
+        Generate API documentation for an endpoint.
+        Ensures all required template parameters are explicitly passed.
 
         Args:
-            project_id: The project ID
-            entity_name: Name of the entity
+            project_id: Project identifier
+            entity_name: The entity name (singular)
             method: HTTP method
-            endpoint_path: Path of the endpoint
+            endpoint_path: API endpoint path
             endpoint_code: Generated endpoint code
 
         Returns:
-            str: Markdown-formatted API documentation
+            str: Generated API documentation
         """
         try:
-            # Use the prompt template via LangchainService
-            docs_content = await LangchainService.generate_code_with_template(
-                template_name="api_docs",
-                language="python",
-                project_id=project_id,
-                entity_name=entity_name,
-                method=method,
-                endpoint_path=endpoint_path,
-                endpoint_code=endpoint_code,
+            # Create a complete set of template variables to ensure nothing is missing
+            template_vars = {
+                # Make sure project_id is included
+                "project_id": project_id,
+                "entity_name": entity_name,
+                "method": method,
+                "method_lower": method.lower(),
+                "endpoint_path": endpoint_path,
+                "endpoint_code": endpoint_code,
+                # Add any other variables that might be used in the template
+                "endpoint_description": f"API endpoint for {entity_name}",
+                "language": "python",
+            }
+
+            # Pass all variables to the template
+            result = await LangchainService.generate_code_with_template(
+                template_name="api_docs", **template_vars  # Spread all variables
             )
 
-            return docs_content["generated_code"]
+            return result["generated_code"]
         except Exception as e:
             logger.error(f"Error generating API documentation: {str(e)}")
-            # Fallback to a basic template if the generation fails
-            return f"""# {entity_name} API Documentation\n\n    ## Overview\n    API for {entity_name} operations.\n\n    ## Base URL\n    `http://localhost:8000`\n\n    ## Endpoints\n\n    ### {method} {endpoint_path}\n    **Description**: {method} endpoint for {entity_name}\n\n    ### GET /health\n    **Description**: Health check endpoint\n\n    ### POST /api/deploy\n    **Description**: Deploy the API to Docker\n\n    ### GET /api/deployment-status\n    **Description**: Check deployment status\n    """
+            # Return simple fallback documentation if generation fails
+            return f"""# {entity_name} API
+
+    ## {method.upper()} {endpoint_path}
+
+    Basic endpoint for {entity_name} resource.
+
+    *Documentation generation failed: {str(e)}*
+    """
 
     async def _save_endpoint_to_db(
         self,
@@ -449,73 +509,97 @@ class CodeGenerationService:
     async def _generate_primary_component(
         self,
         language_template,
-        project_id,
-        entity_name,  # <-- add this parameter
-        prompt,
-        method,
-        endpoint_path,
-        additional_context,
-    ):
+        project_id: str,
+        entity_name: str,  # This should be the unified entity name
+        prompt: str,
+        method: str,
+        endpoint_path: str,
+        additional_context: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
-        Generate the primary component (endpoint/controller) for the requested feature.
-
-        This method creates the main entry point component (such as an API endpoint,
-        controller, or route handler) based on the user's prompt and selected language.
+        Generate the primary component (usually an endpoint/controller) with a unified entity name.
 
         Args:
-            language_template: Template for the target programming language
-            project_id: Identifier for the project being modified
-            entity_name: Name of the entity the component is for
-            prompt: Natural language description of the desired functionality
-            method: HTTP method for the endpoint (GET, POST, etc.)
-            endpoint_path: URL path for the endpoint
-            additional_context: Any supplementary information to guide generation
+            language_template: The language template object
+            project_id: Project identifier
+            entity_name: The unified entity name to use for all components
+            prompt: The prompt describing what to create
+            method: HTTP method for the endpoint
+            endpoint_path: Path for the endpoint
+            additional_context: Any additional context for generation
 
         Returns:
-            Dict: Component data including generated code, file path, and metadata
-
-        Raises:
-            ValueError: If the selected language doesn't support endpoints/controllers
+            Dict[str, Any]: The generated primary component
         """
-        # Get the endpoint component type for this language
-        endpoint_component = language_template.get_component_map().get("endpoint")
-        if not endpoint_component:
-            raise ValueError("Language does not support endpoints/controllers")
+        try:
+            # Log the start of primary component generation
+            logger.info(f"Generating primary component for {entity_name}")
+            await self._notify_event("start", "endpoint", {"entity_name": entity_name})
 
-        # Generate the component
-        return await self._generate_component(
-            language_template,
-            endpoint_component,
-            project_id,
-            entity_name,  # Use the unified entity name
-            prompt,
-            method=method,
-            endpoint_path=endpoint_path,
-            additional_context=additional_context,
-        )
+            # Generate the primary component with the unified entity name
+            component_type = language_template.get_component_map().get("endpoint")
+            primary_component = await language_template.generate_component(
+                component_type=component_type,
+                project_id=project_id,
+                entity_name=entity_name,
+                entity_description=prompt,
+                method=method,
+                endpoint_path=endpoint_path,
+                additional_context=additional_context,
+            )
 
-    def _extract_entity_name(self, language_template, primary_component):
+            # Ensure the entity name in the component is consistent
+            primary_component["entity_name"] = entity_name
+
+            # Get the correct file path using the unified entity name
+            primary_component["file_path"] = language_template.get_component_paths(
+                project_id, entity_name, method=method, endpoint_path=endpoint_path
+            )[component_type]
+
+            # Log completion of primary component generation
+            await self._notify_event("complete", "endpoint", primary_component)
+            logger.info("Generated primary component successfully")
+
+            return primary_component
+
+        except Exception as e:
+            error_msg = f"Error generating primary component: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            await self._notify_info(error_msg)
+            raise
+
+    def _extract_entity_name(
+        self, language_template, primary_component: Dict[str, Any]
+    ) -> str:
         """
-        Extract entity name from the generated code using language-specific extraction rules.
-
-        This method analyzes the primary component code to determine the main entity
-        name (e.g., User, Product, Order) that the generated code is operating on.
-        This entity name is used for naming all related components.
+        Extract and standardize the entity name from the primary component.
+        This improved version ensures consistent entity naming across components.
 
         Args:
-            language_template: Template for the target programming language
-            primary_component: Dictionary containing the generated primary component
+            language_template: The language template used for extraction
+            primary_component: The primary component containing the code
 
         Returns:
-            str: The extracted entity name or "User" as a fallback if extraction fails
+            str: The extracted and standardized entity name
         """
-        existing_entity = primary_component.get("entity_name")
-        if existing_entity:
-            return existing_entity
-        extracted_name = language_template.extract_entity_from_code(
-            primary_component.get("generated_code", "")
-        )
-        return extracted_name or primary_component.get("entity_name") or "Entity"
+        extracted_entity = None
+
+        # Try to extract from the code using language template
+        if primary_component and "generated_code" in primary_component:
+            extracted_entity = language_template.extract_entity_from_code(
+                primary_component["generated_code"]
+            )
+
+        # If we have an entity name from the component metadata, use it as backup
+        if not extracted_entity and "entity_name" in primary_component:
+            extracted_entity = primary_component["entity_name"]
+
+        # If we still don't have an entity name, use a default
+        if not extracted_entity:
+            extracted_entity = "Resource"
+
+        # Standardize the entity name to PascalCase
+        return self._ensure_pascal_case(extracted_entity)
 
     def _initialize_result_dictionary(
         self,
@@ -696,42 +780,116 @@ class CodeGenerationService:
                 f"No updates needed for existing model {entity_name}"
             )
 
+    async def _update_component_with_unified_entity(
+        self,
+        component: Dict[str, Any],
+        old_entity_name: str,
+        new_entity_name: str,
+        language_template,
+    ) -> Dict[str, Any]:
+        """
+        Updates a component's code with the unified entity name.
+
+        Args:
+            component: The component dictionary containing the generated code
+            old_entity_name: The original entity name to replace
+            new_entity_name: The new unified entity name
+            language_template: The language template for generating paths
+
+        Returns:
+            Dict: The updated component
+        """
+        if not component or not component.get("generated_code"):
+            return component
+
+        code = component["generated_code"]
+
+        # Create regex patterns for different case formats
+        snake_old = language_template._to_snake_case(old_entity_name)
+        snake_new = language_template._to_snake_case(new_entity_name)
+
+        camel_old = (
+            old_entity_name[0].lower() + old_entity_name[1:] if old_entity_name else ""
+        )
+        camel_new = (
+            new_entity_name[0].lower() + new_entity_name[1:] if new_entity_name else ""
+        )
+
+        # Create a dictionary of replacements
+        replacements = {
+            # PascalCase
+            old_entity_name: new_entity_name,
+            # snake_case
+            snake_old: snake_new,
+            # camelCase
+            camel_old: camel_new,
+            # Plurals for common words (collections, tables, etc.)
+            f"{snake_old}s": f"{snake_new}s",
+            f"{old_entity_name}s": f"{new_entity_name}s",
+        }
+
+        # Apply all replacements
+        for old, new in replacements.items():
+            if old and old != new:  # Only replace if different and not empty
+                code = code.replace(old, new)
+
+        # Update the code in the component
+        component["generated_code"] = code
+
+        # Update entity_name in the component metadata
+        if "entity_name" in component:
+            component["entity_name"] = new_entity_name
+
+        # Update file paths if they contain the entity name
+        if "file_path" in component:
+            # Keep the same component type but update the entity name part of the path
+            component_file = component["file_path"]
+
+            # Generate new path based on the new entity name but preserve the same component type
+            for component_type, path in language_template.get_component_map().items():
+                if path and path in component_file:
+                    new_paths = language_template.get_component_paths(
+                        project_id="", entity_name=new_entity_name
+                    )
+                    component["file_path"] = new_paths[component_type]
+                    break
+
+        return component
+
     async def _generate_new_components(
         self,
-        result,
+        result: Dict[str, Any],
         language_template,
-        project_id,
-        entity_name,
-        prompt,
-        primary_component,
-        method,
-        endpoint_path,
-    ):
+        project_id: str,
+        entity_name: str,
+        prompt: str,
+        primary_component: Dict[str, Any],
+        method: str,
+        endpoint_path: str,
+    ) -> None:
         """
-        Generate new components for an entity that doesn't already exist in the project.
-
+        Generate all new components for an entity using the unified entity name.
         This method creates all necessary components for a new entity based on the
-        language template's requirements. This typically includes models, schemas,
-        validation rules, helper functions, and migrations as appropriate for the language.
+        language template's requirements.
 
         Args:
             result: Dictionary to store generation results
             language_template: Template for the target programming language
             project_id: Identifier for the project being modified
-            entity_name: Name of the entity to create
+            entity_name: Name of the entity to create (unified)
             prompt: Natural language description of the desired functionality
             primary_component: Dictionary containing the generated primary component
             method: HTTP method for the endpoint (GET, POST, etc.)
             endpoint_path: URL path for the endpoint
-
-        Returns:
-            None: Results are added directly to the result dictionary
         """
         await self._notify_info(f"Generating new components for {entity_name}")
 
-        # Get required components for this language
+        # Get component information from language template
+        component_map = language_template.get_component_map()
         required_components = language_template.get_required_components()
-        endpoint_component = language_template.get_component_map().get("endpoint")
+
+        # Get endpoint component type
+        endpoint_component = component_map.get("endpoint")
         if endpoint_component is None:
             raise ValueError(
                 "Language template does not define an 'endpoint' component."
@@ -744,34 +902,47 @@ class CodeGenerationService:
             "model_code": None,
         }
 
-        # Generate each required component
+        # Generate each required component except migrations (handled separately)
         for component_type in required_components:
             # Skip the primary component as we've already generated it
             if component_type == endpoint_component or component_type == "migration":
                 continue
 
-            await self._notify_info(f"Generating {component_type} for {entity_name}")
-
-            # Generate the component
-            component_result = await self._generate_component(
-                language_template,
-                component_type,
-                project_id,
-                entity_name,
-                prompt,
-                **generated_code,
-                method=method,
-                endpoint_path=endpoint_path,
-            )
-
-            # Store the result
-            result[component_type] = component_result
-
-            # Store generated code for dependencies
-            if component_type == language_template.get_component_map().get("model"):
-                generated_code["model_code"] = component_result.get(
-                    "generated_code", ""
+            try:
+                # Notify start of component generation
+                await self._notify_event(
+                    "start", component_type, {"entity_name": entity_name}
                 )
+                logger.info(f"Generating {component_type} for {entity_name}")
+
+                # Generate the component with the unified entity name
+                component = await language_template.generate_component(
+                    component_type=component_type,
+                    project_id=project_id,
+                    entity_name=entity_name,
+                    entity_description=prompt,
+                    endpoint_code=generated_code.get("endpoint_code", ""),
+                    controller_code=generated_code.get("controller_code", ""),
+                    model_code=generated_code.get("model_code", ""),
+                    method=method,
+                    endpoint_path=endpoint_path,
+                )
+
+                # Add to result
+                result[component_type] = component
+
+                # Store generated code for dependencies
+                if component_type == component_map.get("model"):
+                    generated_code["model_code"] = component.get("generated_code", "")
+
+                # Notify completion of component generation
+                await self._notify_event("complete", component_type, component)
+                logger.info(f"Generated {component_type} successfully")
+
+            except Exception as e:
+                error_msg = f"Error generating {component_type}: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                await self._notify_info(error_msg)
 
         # Now handle migrations separately using the appropriate method for the language
         if "migration" in required_components:
@@ -1440,3 +1611,81 @@ class CodeGenerationService:
                 await self.on_info(message)
             except Exception as e:
                 logger.error(f"Error in info callback: {str(e)}")
+
+    def _derive_entity_name(
+        self, prompt: str, endpoint_path: str, language_template
+    ) -> str:
+        """
+        Derive a meaningful entity name from either the prompt or endpoint path.
+        This is used to establish a consistent entity name early in the process.
+
+        Args:
+            prompt: The user's prompt describing what to create
+            endpoint_path: The API endpoint path
+            language_template: The language template object that has entity extraction methods
+
+        Returns:
+            str: A derived entity name in proper format (e.g., PascalCase)
+        """
+        # First try to extract from the prompt using language template's method
+        entity_from_prompt = language_template.extract_entity_from_prompt(prompt)
+        if entity_from_prompt:
+            return entity_from_prompt
+
+        # If that fails, try extracting from the endpoint path
+        if endpoint_path:
+            # Extract the last segment of the path
+            path_segments = endpoint_path.strip("/").split("/")
+            last_segment = path_segments[-1] if path_segments else ""
+
+            if last_segment:
+                # Convert to singular if plural
+                if last_segment.endswith("s") and not last_segment.endswith("ss"):
+                    last_segment = last_segment[:-1]
+
+                # Convert to PascalCase
+                return self._ensure_pascal_case(last_segment)
+
+        # Default fallback
+        return "Resource"
+
+    def _ensure_pascal_case(self, name: str) -> str:
+        """
+        Ensure the entity name is in PascalCase format.
+
+        Args:
+            name: The entity name to format
+
+        Returns:
+            str: The entity name in PascalCase
+        """
+        if not name:
+            return "Resource"
+
+        # Remove non-alphanumeric characters
+        name = "".join(c for c in name if c.isalnum() or c == "_")
+
+        # Handle snake_case or kebab-case conversion
+        if "_" in name or "-" in name:
+            parts = name.replace("-", "_").split("_")
+            name = "".join(p.capitalize() for p in parts if p)
+
+        # Handle camelCase
+        elif name and name[0].islower() and any(c.isupper() for c in name):
+            name = name[0].upper() + name[1:]
+
+        # Handle all lowercase
+        elif name.islower():
+            name = name.capitalize()
+
+        # Handle plural to singular for common patterns
+        if name.endswith("ies"):
+            name = name[:-3] + "y"
+        elif name.endswith("s") and len(name) > 2 and not name.endswith("ss"):
+            name = name[:-1]
+
+        # Ensure the first character is uppercase
+        if name and name[0].islower():
+            name = name[0].upper() + name[1:]
+
+        return name

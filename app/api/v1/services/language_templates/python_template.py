@@ -74,41 +74,40 @@ class PythonTemplate(LanguageTemplate):
                 return True
         return False
 
+    
     def get_component_paths(
-        self, project_id: str, entity_name: str, **kwargs
-    ) -> Dict[str, str]:
-        """
-        Get file paths for Python components based on project conventions.
+            self, project_id: str, entity_name: str, **kwargs
+        ) -> Dict[str, str]:
+            """
+            Get file paths for Python components based on project conventions.
+            Always uses singular form for component filenames, regardless of endpoint path.
 
-        Args:
-            project_id (str): Identifier for the project being modified
-            entity_name (str): Name of the entity to generate paths for
+            Args:
+                project_id (str): Identifier for the project being modified
+                entity_name (str): Name of the entity to generate paths for
 
-        Returns:
-            Dict[str, str]: Mapping of component types to their file paths
-        """
-        snake_case_entity = self._to_snake_case(entity_name)
-        # For endpoints, use the endpoint path and method from kwargs if available
-        endpoint_path = kwargs.get("endpoint_path", "")
-        method = kwargs.get("method", "").lower()
+            Returns:
+                Dict[str, str]: Mapping of component types to their file paths
+            """
+            snake_case_entity = self._to_snake_case(entity_name)
+            # For endpoints, always use the entity name rather than the endpoint path
+            method = kwargs.get("method", "").lower()
 
-        if endpoint_path and method:
-            # Extract the last segment of the path for the filename
-            path_segments = endpoint_path.strip("/").split("/")
-            last_segment = path_segments[-1] if path_segments else endpoint_path
-            endpoint_file = f"endpoints/{last_segment}.{method}.py"
-        else:
-            # Fallback to entity-based naming if endpoint path is not provided
-            endpoint_file = f"endpoints/{snake_case_entity}_endpoint.py"
+            if method:
+                # Use entity name consistently for all components including endpoints
+                endpoint_file = f"endpoints/{snake_case_entity}.{method}.py"
+            else:
+                # Fallback to generic naming if method is not provided
+                endpoint_file = f"endpoints/{snake_case_entity}.py"
 
-        return {
-            "endpoint": endpoint_file,
-            "model": f"models/{snake_case_entity}.py",
-            "schema": f"schemas/{snake_case_entity}_schema.py",
-            "migration": f"alembic/versions/create_{snake_case_entity}_table.py",
-            "helpers": f"helpers/{snake_case_entity}_helpers.py",
-        }
-
+            return {
+                "endpoint": endpoint_file,
+                "model": f"models/{snake_case_entity}.py",
+                "schema": f"schemas/{snake_case_entity}_schema.py",
+                "migration": f"alembic/versions/create_{snake_case_entity}_table.py",
+                "helpers": f"helpers/{snake_case_entity}_helpers.py",
+                "api_docs": f"docs/{snake_case_entity}.md",
+            }
     def extract_entity_from_code(self, code: str) -> Optional[str]:
         """
         Extract entity name from Python code using regex patterns.

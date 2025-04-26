@@ -55,6 +55,49 @@ def run_git_command(command, cwd=None):
         error_msg = e.stderr.strip()
         logger.error(f"Git command failed: {cmd_str}")
         logger.error(f"Error details: {error_msg}")
+
+        # Special handling for common git errors
+        if "nothing to commit" in error_msg:
+            logger.info("Nothing to commit - working tree clean")
+            # For commit operations, return the current HEAD commit hash
+            if "commit" in command:
+                try:
+                    # Get the current commit hash
+                    head_result = subprocess.run(
+                        ["git", "rev-parse", "HEAD"],
+                        cwd=cwd,
+                        env=env,
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    return head_result.stdout.strip()
+                except Exception:
+                    # If we can't get the HEAD, just return a placeholder
+                    return "HEAD"
+            # For other operations, return empty string to indicate success with no output
+            return ""
+
+        # Handle case where a file is already staged but unchanged
+        if "no changes added to commit" in error_msg:
+            logger.info("No changes added to commit")
+            # Similar to above, return current HEAD for commit operations
+            if "commit" in command:
+                try:
+                    head_result = subprocess.run(
+                        ["git", "rev-parse", "HEAD"],
+                        cwd=cwd,
+                        env=env,
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    return head_result.stdout.strip()
+                except Exception:
+                    return "HEAD"
+            return ""
+
+        # For other error cases, raise the exception with detailed error message
         raise Exception(f"Git command failed: {error_msg}")
 
 

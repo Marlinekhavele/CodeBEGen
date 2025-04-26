@@ -58,7 +58,7 @@ class ModelSchemaManager:
                 existing_model_code = f.read()
 
             # Use LLM to identify needed field changes
-            field_changes = await ModelSchemaManager._identify_field_changes(
+            field_changes = await ModelSchemaManager.analyze_required_changes(
                 prompt_description,
                 existing_model_code,
                 endpoint_code,

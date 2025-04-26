@@ -156,6 +156,17 @@ class GitService:
             # Stage the changes for the specified file
             logger.info(f"Adding file to Git index: {file_path}")
             run_git_command(["git", "add", file_path], cwd=project_dir)
+            # Check if there are changes to commit
+            status_output = run_git_command(
+                ["git", "status", "--porcelain"], cwd=project_dir
+            )
+            if not status_output.strip():
+                logger.info("No changes to commit")
+                # Get the current commit hash and return it
+                current_hash = run_git_command(
+                    ["git", "rev-parse", "HEAD"], cwd=project_dir
+                )
+                return current_hash
 
             # Prepare commit message
             if not commit_message:

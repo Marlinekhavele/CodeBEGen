@@ -287,7 +287,7 @@ IMPORTANT:
 """
 # Step 4: Generate the Alembic migration
 MIGRATION_GENERATION_TEMPLATE = """
-You are an expert Alembic developer helping to create a database migration.
+You are an expert Alembic developer helping to create a database migration for SQLite.
 Generate an Alembic migration for the following entity:
 Entity Name: {entity_name}
 Latest Migration ID: {latest_migration_id}
@@ -298,31 +298,36 @@ Model Code:
 {model_code}
 ```
 
-# TASK: CREATE ALEMBIC MIGRATION ONLY
+# TASK: CREATE SQLITE-COMPATIBLE ALEMBIC MIGRATION
 # Analyze the provided SQLAlchemy `{model_code}` to determine the required table name, columns, types, constraints, and indexes.
 # Generate an Alembic migration script using `op` commands to create this table.
+# REQUIRED REVISION INFORMATION
+    -The migration MUST have down_revision set EXACTLY as follows:
+    down_revision = '{latest_migration_id}'
+    Do not use empty strings, None, or any other value for down_revision.
+# SQLITE COMPATIBILITY REQUIREMENTS
+1. **SQLite Limitations**:
+   - DO NOT use ALTER TABLE operations (not fully supported in SQLite)
+   - DO NOT use UUID types directly (use String type instead)
+   - DO NOT use server_default with complex functions (use simple text constants)
+   - Avoid column type modifications after creation
 
-# MIGRATION REQUIREMENTS
-1. **Structure**:
+2. **Structure**:
    - Include revision ID and comments
    - Implement both upgrade() and downgrade() functions
-   - Use proper Alembic op commands
+   - Use only SQLite-compatible Alembic op commands
 
-2. **Column Creation**:
-   - Define all columns with correct types and constraints
-   - Include primary key, foreign keys, and indexes
-   - Add timestamp columns
+3. **Column Creation**:
+   - Define all columns with SQLite-compatible types
+   - Use sa.String() instead of UUIDs or specialized types
+   - For dates/times, use either sa.DateTime() or sa.Date()
+   - Set server_default to sa.text('CURRENT_TIMESTAMP') for timestamp fields
 
-3. **Dependency Chain**:
-   - This is NOT the first migration
+4. **Dependency Chain**:
    - Set down_revision to '{latest_migration_id}' to ensure this migration runs after the most recent migration
    - Generate a unique revision ID different from '{latest_migration_id}'
 
-# --- ILLUSTRATIVE EXAMPLE ONLY ---
-The following code example demonstrates the expected structure and principles for an Alembic migration.
-Adapt these principles based on the actual table structure derived from the provided `{model_code}`. Do NOT simply copy the example code.
-
-# CODE EXAMPLE
+# SQLITE-COMPATIBLE EXAMPLE
 ```python
 \"\"\"create table for {entity_name}
 Revision ID: a1b2c3d4e5f6
@@ -332,7 +337,6 @@ Create Date: 2024-03-26 12:00:00.000000
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.sql import func
-import uuid
 
 # revision identifiers
 revision = 'a1b2c3d4e5f6'
@@ -341,36 +345,37 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
-    # Extract table name from the model code
-    table_name = "{entity_name}s".lower()  # Default plural form, will be overridden by actual __tablename__ in model
-
-    # Create table
+    # Create table with SQLite compatibility
     op.create_table(
-        table_name,
+        '{entity_name}s',
         sa.Column('id', sa.String(), nullable=False),
-        # Add other columns here based on model_code analysis
-        sa.Column('created_at', sa.DateTime(), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(), server_default=sa.func.now(), onupdate=sa.func.now()),
+        sa.Column('name', sa.String(), nullable=False),
+        sa.Column('email', sa.String(), nullable=False),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),
         sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_{entity_name}s_email'), '{entity_name}s', ['email'], unique=False)
 
 def downgrade():
-    # Extract table name from the model code
-    table_name = "{entity_name}s".lower()  # Default plural form, will be overridden by actual __tablename__ in model
-
     # Drop table
-    op.drop_table(table_name)
+    op.drop_index(op.f('ix_{entity_name}s_email'), table_name='{entity_name}s')
+    op.drop_table('{entity_name}s')
 ```
 
 IMPORTANT:
 1. Return ONLY the Alembic migration code for creating the table for {entity_name}.
 2. EXTRACT the table name from the provided model_code by looking for `__tablename__` attribute.
 3. If no __tablename__ is found in the model, use the lowercase plural form of {entity_name} as the default table name.
-4. Do not include any explanations, comments, or text after the code.
-5. The response should contain ONLY the code itself.
-6. The migration MUST have down_revision set to '{latest_migration_id}' to chain correctly with existing migrations.
-7. The revision ID must be a new unique string different from existing IDs.
+4. Use ONLY SQLite-compatible operations (CREATE TABLE, DROP TABLE, CREATE INDEX, DROP INDEX).
+5. AVOID all ALTER TABLE operations which are problematic in SQLite.
+6. Use sa.String() instead of UUID or other specialized types.
+7. The migration MUST have down_revision set to '{latest_migration_id}' to chain correctly with existing migrations.
+8. The revision ID must be a new unique string different from existing IDs.
+9. Do not include any explanations, comments, or text after the code.
+10. The response should contain ONLY the code itself.
+11. The migration MUST have down_revision set to '{latest_migration_id}' to chain correctly with existing migrations.
 """
+
 # Helper Functions Generation Template
 
 HELPER_FUNCTIONS_TEMPLATE = """

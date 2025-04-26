@@ -348,37 +348,37 @@ class LLMService:
             logger.error(f"Error generating schema: {str(e)}", exc_info=True)
             raise Exception(f"Failed to generate schema: {str(e)}")
 
-    @staticmethod
-    async def generate_migration(
-        project_id: str,
-        entity_name: str,
-        model_code: Optional[str] = None,
-        language: str = "python",
-    ) -> Dict[str, Any]:
-        """
-        Generates a migration for a given entity.
-        Updated to use Langchain.
+    # @staticmethod
+    # async def generate_migration(
+    #     project_id: str,
+    #     entity_name: str,
+    #     model_code: Optional[str] = None,
+    #     language: str = "python",
+    # ) -> Dict[str, Any]:
+    #     """
+    #     Generates a migration for a given entity.
+    #     Updated to use Langchain.
 
-        Args:
-            project_id: The unique identifier of the project.
-            entity_name: The name of the entity for which the migration is generated.
-            model_code: Optional model code for context.
-            language: Programming language to generate code in (python, javascript, etc.)
+    #     Args:
+    #         project_id: The unique identifier of the project.
+    #         entity_name: The name of the entity for which the migration is generated.
+    #         model_code: Optional model code for context.
+    #         language: Programming language to generate code in (python, javascript, etc.)
 
-        Returns:
-            Dict[str, Any]: Information about the generated migration.
-        """
-        try:
-            # Use Langchain service for generation
-            return await LangchainService.generate_migration(
-                project_id=project_id,
-                entity_name=entity_name,
-                language=language,
-                model_code=model_code,
-            )
-        except Exception as e:
-            logger.error(f"Error generating migration: {str(e)}", exc_info=True)
-            raise Exception(f"Failed to generate migration: {str(e)}")
+    #     Returns:
+    #         Dict[str, Any]: Information about the generated migration.
+    #     """
+    #     try:
+    #         # Use Langchain service for generation
+    #         return await LangchainService.generate_migration(
+    #             project_id=project_id,
+    #             entity_name=entity_name,
+    #             language=language,
+    #             model_code=model_code,
+    #         )
+    #     except Exception as e:
+    #         logger.error(f"Error generating migration: {str(e)}", exc_info=True)
+    #         raise Exception(f"Failed to generate migration: {str(e)}")
 
     @staticmethod
     async def generate_helpers(

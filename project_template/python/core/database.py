@@ -2,6 +2,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pathlib import Path
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DB_DIR = BASE_DIR / "storage" / "db"

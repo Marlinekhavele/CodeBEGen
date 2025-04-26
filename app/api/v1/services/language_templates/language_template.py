@@ -1,5 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,14 @@ class LanguageTemplate(ABC):
 
         Returns:
             Optional[str]: Entity name if found, None otherwise
+        """
+        pass
+
+    @abstractmethod
+    async def run_migrations(self, project_dir: Path, entity_name: str):
+        """
+        Run the migration logic for this language.
+        Should be implemented by each concrete template.
         """
         pass
 

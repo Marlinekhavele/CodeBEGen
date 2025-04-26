@@ -55,6 +55,49 @@ def run_git_command(command, cwd=None):
         error_msg = e.stderr.strip()
         logger.error(f"Git command failed: {cmd_str}")
         logger.error(f"Error details: {error_msg}")
+
+        # Special handling for common git errors
+        if "nothing to commit" in error_msg:
+            logger.info("Nothing to commit - working tree clean")
+            # For commit operations, return the current HEAD commit hash
+            if "commit" in command:
+                try:
+                    # Get the current commit hash
+                    head_result = subprocess.run(
+                        ["git", "rev-parse", "HEAD"],
+                        cwd=cwd,
+                        env=env,
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    return head_result.stdout.strip()
+                except Exception:
+                    # If we can't get the HEAD, just return a placeholder
+                    return "HEAD"
+            # For other operations, return empty string to indicate success with no output
+            return ""
+
+        # Handle case where a file is already staged but unchanged
+        if "no changes added to commit" in error_msg:
+            logger.info("No changes added to commit")
+            # Similar to above, return current HEAD for commit operations
+            if "commit" in command:
+                try:
+                    head_result = subprocess.run(
+                        ["git", "rev-parse", "HEAD"],
+                        cwd=cwd,
+                        env=env,
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    return head_result.stdout.strip()
+                except Exception:
+                    return "HEAD"
+            return ""
+
+        # For other error cases, raise the exception with detailed error message
         raise Exception(f"Git command failed: {error_msg}")
 
 
@@ -93,6 +136,42 @@ def clone_template_repo(project_dir, language):
         src_file = template_dir / file_name
         if src_file.exists():
             shutil.copy(src_file, project_dir / file_name)
+
+    # Copy .gitignore if it exists in the template
+    gitignore_src = template_dir / ".gitignore"
+    if gitignore_src.exists():
+        shutil.copy(gitignore_src, project_dir / ".gitignore")
+    else:
+        # Create default .gitignore if none exists in template
+        with open(project_dir / ".gitignore", "w") as f:
+            f.write(
+                """# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# DO NOT ignore database files and storage directory
+!storage/
+!storage/db/
+!storage/db/db.sqlite
+!storage/db/*.db
+
+# Keep all migrations
+!alembic/versions/*.py
+"""
+            )
 
     # Initialize git
     run_git_command(["git", "init"], cwd=project_dir)

@@ -5,7 +5,8 @@
     "models",
     "schemas",
     "helpers",
-    "alembic"
+    "alembic",
+    "storage"
   ],
   "copy_files": [
     "main.py",

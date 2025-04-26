@@ -21,8 +21,13 @@ def get_latest_migration_id(alembic_dir: str = "alembic") -> str:
         from alembic.config import Config
         from alembic.script import ScriptDirectory
 
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        alembic_ini_path = os.path.join(base_dir, "alembic.ini")
+        # Find alembic.ini in the project directory (parent of alembic_dir)
+        project_dir = os.path.dirname(os.path.abspath(alembic_dir))
+        alembic_ini_path = os.path.join(project_dir, "alembic.ini")
+
+        if not os.path.exists(alembic_ini_path):
+            raise FileNotFoundError(f"alembic.ini not found at {alembic_ini_path}")
+
         alembic_cfg = Config(alembic_ini_path)
         script = ScriptDirectory.from_config(alembic_cfg)
         heads = script.get_heads()
@@ -43,7 +48,7 @@ def get_latest_migration_id(alembic_dir: str = "alembic") -> str:
 
         if not os.path.exists(versions_dir):
             logger.warning(f"Directory does not exist: {versions_dir}")
-            return "0001"  # Default to initial migration if versions directory doesn't exist
+            return "0001"
 
         migration_files = [f for f in os.listdir(versions_dir) if f.endswith(".py")]
         logger.debug(

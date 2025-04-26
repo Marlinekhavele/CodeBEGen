@@ -6,6 +6,7 @@ from app.api.v1.routes.get_all_endpoints import router as get_all_endpoints_rout
 from app.api.v1.routes.http_methods_test_endpoint import (
     router as http_methods_test_endpoint_router,
 )
+from app.api.v1.routes.project_docs import router as get_project_docs_router
 from app.api.v1.routes.project_db import router as get_project_db_router
 from app.api.v1.routes.project_db_migration import router as project_db_migration_router
 from app.api.v1.routes.project_helpers import router as get_project_helpers_router

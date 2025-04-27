@@ -89,15 +89,20 @@ class PythonTemplate(LanguageTemplate):
             Dict[str, str]: Mapping of component types to their file paths
         """
         snake_case_entity = self._to_snake_case(entity_name)
-        # For endpoints, always use the entity name rather than the endpoint path
+        # For endpoints, use the endpoint path and method from kwargs if available
+        endpoint_path = kwargs.get("endpoint_path", "")
         method = kwargs.get("method", "").lower()
 
-        if method:
-            # Use entity name consistently for all components including endpoints
-            endpoint_file = f"endpoints/{snake_case_entity}.{method}.py"
+        if endpoint_path and method:
+            # Extract the last segment of the path for the filename
+            path_segments = endpoint_path.strip("/").split("/")
+            last_segment = path_segments[-1] if path_segments else endpoint_path
+            endpoint_file = f"endpoints/{last_segment}.{method}.py"
+            api_docs_file = f"docs/{last_segment}.md"
         else:
-            # Fallback to generic naming if method is not provided
+            # Fallback to entity-based naming if endpoint path is not provided
             endpoint_file = f"endpoints/{snake_case_entity}.py"
+            api_docs_file = f"docs/{snake_case_entity}.md"
 
         return {
             "endpoint": endpoint_file,
@@ -105,7 +110,7 @@ class PythonTemplate(LanguageTemplate):
             "schema": f"schemas/{snake_case_entity}_schema.py",
             "migration": f"alembic/versions/create_{snake_case_entity}_table.py",
             "helpers": f"helpers/{snake_case_entity}_helpers.py",
-            "api_docs": f"docs/{snake_case_entity}.md",
+            "api_docs": api_docs_file,
         }
 
     def extract_entity_from_code(self, code: str) -> Optional[str]:

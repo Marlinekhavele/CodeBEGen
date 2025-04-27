@@ -198,19 +198,14 @@ class CodeGenerationService:
             primary_component = await self._generate_primary_component(
                 language_template,
                 project_id,
-                entity_name,  # Pass the initial entity name
+                entity_name,
                 prompt,
                 method,
                 endpoint_path,
                 request.additional_context,
             )
 
-            # Step 2: Determine if database components are needed
-            needs_database = language_template.needs_database(
-                primary_component.get("generated_code", "")
-            )
-
-            # Step 3: Extract entity name from generated code to confirm/refine it
+            # Step 2: Extract entity name from generated code to confirm/refine it
             extracted_entity = language_template.extract_entity_from_code(
                 primary_component.get("generated_code", "")
             )
@@ -252,7 +247,49 @@ class CodeGenerationService:
                 logger.info(f"Final unified entity name: {entity_name}")
                 primary_component["entity_name"] = entity_name
 
-            # Step 4: Initialize result dictionary with updated primary component
+            # Step 3: Generate API documentation immediately after the endpoint processing
+            # This ensures API docs use the same entity name as the endpoint
+            try:
+                logger.info(f"About to generate API docs for {entity_name}")
+                await self._notify_event(
+                    "start", "api_docs", {"entity_name": entity_name}
+                )
+                api_docs_content = await self._generate_api_docs(
+                    project_id,
+                    entity_name,
+                    method,
+                    endpoint_path,
+                    primary_component.get("generated_code", ""),
+                )
+
+                # Get the API documentation path from the same function that generates the endpoint path
+                # This ensures they use the same naming convention
+                component_paths = language_template.get_component_paths(
+                    project_id, entity_name, method=method, endpoint_path=endpoint_path
+                )
+                api_docs_path = component_paths["api_docs"]
+
+                api_docs_result = {
+                    "file_path": api_docs_path,
+                    "generated_code": api_docs_content,
+                    "content_base64": LangchainService.encode_content(api_docs_content),
+                    "file_hash": LangchainService.generate_file_hash(api_docs_content),
+                    "entity_name": entity_name,
+                }
+                await self._notify_event("complete", "api_docs", api_docs_result)
+                logger.info("Generated API documentation successfully")
+            except Exception as e:
+                error_msg = f"Error generating API documentation: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                await self._notify_info(error_msg)
+                api_docs_result = None
+
+            # Step 4: Determine if database components are needed
+            needs_database = language_template.needs_database(
+                primary_component.get("generated_code", "")
+            )
+
+            # Step 5: Initialize result dictionary with updated primary component
             component_type = language_template.get_component_map().get("endpoint")
             result = self._initialize_result_dictionary(
                 primary_component,
@@ -262,7 +299,11 @@ class CodeGenerationService:
                 component_type,
             )
 
-            # Step 5: Generate database components if needed
+            # Add API docs to the result if generation was successful
+            if api_docs_result:
+                result["api_docs"] = api_docs_result
+
+            # Step 6: Generate database components if needed
             if needs_database:
                 await self._notify_info(f"Database components needed: {needs_database}")
 
@@ -295,7 +336,7 @@ class CodeGenerationService:
                         endpoint_path,
                     )
 
-            # Step 6: Generate Dockerfile - ALWAYS generate regardless of database needs
+            # Step 7: Generate Dockerfile - ALWAYS generate regardless of database needs
             try:
                 logger.info(f"About to generate Dockerfile for {entity_name}")
                 await self._notify_event(
@@ -321,38 +362,6 @@ class CodeGenerationService:
                 logger.error(error_msg, exc_info=True)
                 await self._notify_info(error_msg)
 
-            # Step 7: Generate API documentation - ALWAYS generate regardless of database needs
-            try:
-                logger.info(f"About to generate API docs for {entity_name}")
-                await self._notify_event(
-                    "start", "api_docs", {"entity_name": entity_name}
-                )
-                api_docs_content = await self._generate_api_docs(
-                    project_id,
-                    entity_name,  # Use the unified entity name
-                    method,
-                    endpoint_path,
-                    result["endpoint"].get("generated_code", ""),
-                )
-
-                # Generate file path using the language template for consistency
-                api_docs_path = (
-                    f"docs/{language_template._to_snake_case(entity_name)}.md"
-                )
-
-                result["api_docs"] = {
-                    "file_path": api_docs_path,
-                    "generated_code": api_docs_content,
-                    "content_base64": LangchainService.encode_content(api_docs_content),
-                    "file_hash": LangchainService.generate_file_hash(api_docs_content),
-                    "entity_name": entity_name,  # Include the entity name in the metadata
-                }
-                await self._notify_event("complete", "api_docs", result["api_docs"])
-                logger.info("Generated API documentation successfully")
-            except Exception as e:
-                error_msg = f"Error generating API documentation: {str(e)}"
-                logger.error(error_msg, exc_info=True)
-                await self._notify_info(error_msg)
             # Step 8: Commit files to Git
             git_results = await self._commit_files_to_git(
                 project_id, result, language, language_template

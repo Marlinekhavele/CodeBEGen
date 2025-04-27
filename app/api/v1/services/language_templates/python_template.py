@@ -112,7 +112,7 @@ class PythonTemplate(LanguageTemplate):
             "helpers": f"helpers/{snake_case_entity}_helpers.py",
             "api_docs": api_docs_file,
         }
-        
+
 
     def extract_entity_from_code(self, code: str) -> Optional[str]:
         """

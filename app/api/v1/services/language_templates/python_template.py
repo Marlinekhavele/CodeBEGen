@@ -113,7 +113,6 @@ class PythonTemplate(LanguageTemplate):
             "api_docs": api_docs_file,
         }
 
-
     def extract_entity_from_code(self, code: str) -> Optional[str]:
         """
         Extract entity name from Python code using regex patterns.

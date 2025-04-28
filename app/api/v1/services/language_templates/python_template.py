@@ -79,6 +79,7 @@ class PythonTemplate(LanguageTemplate):
     ) -> Dict[str, str]:
         """
         Get file paths for Python components based on project conventions.
+        Always uses singular form for component filenames, regardless of endpoint path.
 
         Args:
             project_id (str): Identifier for the project being modified
@@ -97,9 +98,11 @@ class PythonTemplate(LanguageTemplate):
             path_segments = endpoint_path.strip("/").split("/")
             last_segment = path_segments[-1] if path_segments else endpoint_path
             endpoint_file = f"endpoints/{last_segment}.{method}.py"
+            api_docs_file = f"docs/{last_segment}.md"
         else:
             # Fallback to entity-based naming if endpoint path is not provided
-            endpoint_file = f"endpoints/{snake_case_entity}_endpoint.py"
+            endpoint_file = f"endpoints/{snake_case_entity}.py"
+            api_docs_file = f"docs/{snake_case_entity}.md"
 
         return {
             "endpoint": endpoint_file,
@@ -107,6 +110,7 @@ class PythonTemplate(LanguageTemplate):
             "schema": f"schemas/{snake_case_entity}_schema.py",
             "migration": f"alembic/versions/create_{snake_case_entity}_table.py",
             "helpers": f"helpers/{snake_case_entity}_helpers.py",
+            "api_docs": api_docs_file,
         }
 
     def extract_entity_from_code(self, code: str) -> Optional[str]:

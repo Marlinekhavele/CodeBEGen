@@ -107,7 +107,7 @@ class PythonTemplate(LanguageTemplate):
         return {
             "endpoint": endpoint_file,
             "model": f"models/{snake_case_entity}.py",
-            "schema": f"schemas/{snake_case_entity}_schema.py",
+            "schema": f"schemas/{snake_case_entity}.py",
             "migration": f"alembic/versions/create_{snake_case_entity}_table.py",
             "helpers": f"helpers/{snake_case_entity}_helpers.py",
             "api_docs": api_docs_file,

@@ -389,6 +389,36 @@ class JavaScriptTemplate(LanguageTemplate):
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         return f"{timestamp}-create-{entity_name}"
 
+    def run_migrations(self, project_path: str, **kwargs) -> bool:
+        """
+        Implementation of the abstract method to handle JavaScript migrations.
+
+        Args:
+            project_path (str): Path to the project
+            **kwargs: Additional parameters
+
+        Returns:
+            bool: True if migrations are successful or ignored, False otherwise
+        """
+        logger.info("JavaScript migrations are being ignored as requested")
+        return True
+
+    def _to_snake_case(self, name: str) -> str:
+        """
+        Convert string to snake_case.
+
+        Args:
+            name (str): Input string to convert
+
+        Returns:
+            str: String converted to snake_case
+        """
+        # First handle camelCase and PascalCase
+        s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
+        s2 = re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
+        # Replace hyphens and spaces with underscores
+        return re.sub(r"[-\s]", "_", s2).lower()
+
     async def generate_dockerfile(self, project_id: str, entity_name: str) -> str:
         """
         Generate a Dockerfile for JavaScript/Node.js application.

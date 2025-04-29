@@ -851,17 +851,29 @@ class CodeGenerationService:
 
         # Update file paths if they contain the entity name
         if "file_path" in component:
-            # Keep the same component type but update the entity name part of the path
-            component_file = component["file_path"]
+            # Get the component type from the component itself
+            component_type = component.get("component_type")
 
-            # Generate new path based on the new entity name but preserve the same component type
-            for component_type, path in language_template.get_component_map().items():
-                if path and path in component_file:
-                    new_paths = language_template.get_component_paths(
-                        project_id="", entity_name=new_entity_name
-                    )
+            if component_type:
+                # Handle special case for 'endpoint' in JavaScript
+                if component_type == "endpoint" and hasattr(
+                    language_template, "get_component_map"
+                ):
+                    component_map = language_template.get_component_map()
+                    if "endpoint" in component_map:
+                        component_type = component_map[
+                            "endpoint"
+                        ]  # Convert from abstract to language-specific
+
+                # Generate new paths with the new entity name
+                new_paths = language_template.get_component_paths(
+                    project_id=component.get("project_id", ""),
+                    entity_name=new_entity_name,
+                )
+
+                # Update the file path if the mapped component type exists in new_paths
+                if component_type in new_paths:
                     component["file_path"] = new_paths[component_type]
-                    break
 
         return component
 

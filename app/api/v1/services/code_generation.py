@@ -853,20 +853,24 @@ class CodeGenerationService:
         if "file_path" in component:
             # Get the component type from the component itself
             component_type = component.get("component_type")
-            
+
             if component_type:
                 # Handle special case for 'endpoint' in JavaScript
-                if component_type == "endpoint" and hasattr(language_template, "get_component_map"):
+                if component_type == "endpoint" and hasattr(
+                    language_template, "get_component_map"
+                ):
                     component_map = language_template.get_component_map()
                     if "endpoint" in component_map:
-                        component_type = component_map["endpoint"]  # Convert from abstract to language-specific
-                
+                        component_type = component_map[
+                            "endpoint"
+                        ]  # Convert from abstract to language-specific
+
                 # Generate new paths with the new entity name
                 new_paths = language_template.get_component_paths(
-                    project_id=component.get("project_id", ""), 
-                    entity_name=new_entity_name
+                    project_id=component.get("project_id", ""),
+                    entity_name=new_entity_name,
                 )
-                
+
                 # Update the file path if the mapped component type exists in new_paths
                 if component_type in new_paths:
                     component["file_path"] = new_paths[component_type]

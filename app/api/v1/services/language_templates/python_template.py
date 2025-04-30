@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 from pathlib import Path
@@ -914,3 +915,241 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
             latest_migration_id = "e77b933ce306"  # Use a default ID
 
         return latest_migration_id
+
+    async def run_migrations_with_logs(self, project_dir: Path, logger) -> dict:
+        """
+        Runs simplified database migrations while streaming logs to the provided logger.
+
+        Args:
+            project_dir (Path): The root directory of the project
+            logger: An async logger object to stream logs to
+
+        Returns:
+            dict: Migration results
+        """
+        await logger.info(f"Running simplified migrations in {project_dir}")
+        result = {
+            "success": False,
+            "database_path": None,
+            "message": "",
+            "tables_created": [],
+            "git_commit": None,
+        }
+
+        # Set up directories with proper absolute paths
+        storage_dir = project_dir / "storage" / "db"
+        storage_dir.mkdir(exist_ok=True, parents=True)
+        sqlite_path = storage_dir / "db.sqlite"
+
+        await logger.info(f"Storage directory: {storage_dir}")
+        await logger.info(f"SQLite path: {sqlite_path}")
+
+        # Make sure database connection works
+        try:
+            import sqlite3
+
+            conn = sqlite3.connect(str(sqlite_path))
+            cursor = conn.cursor()
+
+            await logger.info("Database connection established successfully")
+
+            # Get a list of existing tables
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            existing_tables = [table[0] for table in cursor.fetchall()]
+            await logger.info(
+                f"Detected {len(existing_tables)} existing tables in database"
+            )
+
+            # Now, scan the models directory to find new models
+            models_dir = project_dir / "models"
+            if models_dir.exists():
+                model_files = list(models_dir.glob("*.py"))
+                await logger.info(f"Found {len(model_files)} model files to analyze")
+
+                tables_created = []
+
+                # For each model file, try to extract the table definition
+                for model_file in model_files:
+                    model_name = model_file.stem
+                    await logger.info(f"Analyzing model: {model_name}")
+
+                    # Read the model file content
+                    model_content = model_file.read_text()
+
+                    # Add some delay to simulate processing time
+                    await asyncio.sleep(0.2)
+
+                    # Try to extract table name from the model
+                    table_name_match = re.search(
+                        r"__tablename__\s*=\s*['\"]([^'\"]+)['\"]", model_content
+                    )
+                    if table_name_match:
+                        table_name = table_name_match.group(1)
+                        await logger.info(
+                            f"Found table name '{table_name}' in model definition"
+                        )
+                    else:
+                        # If no explicit table name, use the snake_case model name + 's'
+                        snake_case = self._to_snake_case(model_name)
+                        table_name = f"{snake_case}s"
+                        await logger.info(
+                            f"No explicit table name found, using '{table_name}'"
+                        )
+
+                    # Check if this table already exists
+                    if table_name in existing_tables:
+                        await logger.info(
+                            f"Table '{table_name}' already exists, skipping"
+                        )
+                        continue
+
+                    # Try to extract the column definitions
+                    try:
+                        await logger.info(
+                            f"Extracting column definitions for '{table_name}'"
+                        )
+                        # Analyze the model content to extract column definitions
+                        columns = []
+                        column_matches = re.finditer(
+                            r"(\w+)\s*=\s*Column\(([^)]+)\)", model_content
+                        )
+
+                        for match in column_matches:
+                            column_name = match.group(1)
+                            column_def = match.group(2)
+                            columns.append((column_name, column_def))
+                            await logger.info(
+                                f"Found column: {column_name} ({column_def})"
+                            )
+
+                        # Generate a CREATE TABLE statement
+                        if columns:
+                            await logger.info(
+                                f"Generating CREATE TABLE statement for '{table_name}'"
+                            )
+                            create_table_sql = (
+                                f"CREATE TABLE IF NOT EXISTS {table_name} (\n"
+                            )
+
+                            sql_columns = []
+                            for col_name, col_def in columns:
+                                # Simplify SQLAlchemy type definitions to basic SQLite types
+                                sqlite_type = "TEXT"  # Default type
+
+                                if "Integer" in col_def:
+                                    sqlite_type = "INTEGER"
+                                elif "Float" in col_def:
+                                    sqlite_type = "REAL"
+                                elif "Boolean" in col_def:
+                                    sqlite_type = "BOOLEAN"
+                                elif "DateTime" in col_def:
+                                    sqlite_type = "TIMESTAMP"
+
+                                # Check for primary key
+                                is_primary = (
+                                    "primary_key=True" in col_def
+                                    or "primary_key = True" in col_def
+                                )
+                                primary_key = "PRIMARY KEY" if is_primary else ""
+
+                                # Check for nullable
+                                is_nullable = not (
+                                    "nullable=False" in col_def
+                                    or "nullable = False" in col_def
+                                )
+                                nullable = "" if is_nullable else "NOT NULL"
+
+                                # Column definition
+                                sql_col = f"    {col_name} {sqlite_type} {primary_key} {nullable}".strip()
+                                sql_columns.append(sql_col)
+
+                            create_table_sql += ",\n".join(sql_columns)
+                            create_table_sql += "\n);"
+
+                            await logger.info(f"Executing SQL:\n{create_table_sql}")
+
+                            # Execute the CREATE TABLE statement
+                            cursor.execute(create_table_sql)
+                            conn.commit()
+
+                            tables_created.append(table_name)
+                            await logger.info(
+                                f"✅ Successfully created table: {table_name}"
+                            )
+
+                    except Exception as e:
+                        error_msg = (
+                            f"Error creating table from model {model_name}: {str(e)}"
+                        )
+                        await logger.error(error_msg)
+
+                # Update result with tables created
+                result["tables_created"] = tables_created
+                if tables_created:
+                    result["message"] = (
+                        f"Created {len(tables_created)} new tables: {', '.join(tables_created)}"
+                    )
+                    await logger.info(f"Migration summary: {result['message']}")
+                else:
+                    result["message"] = "No new tables needed to be created."
+                    await logger.info(f"Migration summary: {result['message']}")
+
+            conn.close()
+            result["success"] = True
+            result["database_path"] = str(sqlite_path)
+
+            # If we successfully updated the database, commit it to Git
+            if result["success"] and sqlite_path.exists() and result["tables_created"]:
+                try:
+                    # Get the project_id from the project_dir path
+                    project_id = project_dir.name
+                    await logger.info(
+                        f"Committing changes to Git (project_id: {project_id})"
+                    )
+
+                    # Read the database as binary data
+                    with open(sqlite_path, "rb") as f:
+                        sqlite_data = f.read()
+                    await logger.info(
+                        f"Read {len(sqlite_data)} bytes from database file"
+                    )
+
+                    relative_path = str(sqlite_path.relative_to(project_dir))
+                    commit_message = f"Update SQLite database with new tables: {', '.join(tables_created)}"
+
+                    # Use the GitService to commit the binary file
+                    await logger.info(
+                        f"Creating Git commit with message: {commit_message}"
+                    )
+                    commit_result = await GitService.commit_binary_file_update(
+                        project_id=project_id,
+                        binary_content=sqlite_data,
+                        file_path=relative_path,
+                        commit_message=commit_message,
+                    )
+
+                    result["git_commit"] = {
+                        "success": True,
+                        "commit_id": commit_result,
+                        "message": commit_message,
+                    }
+
+                    await logger.info(
+                        f"✅ Successfully committed database to Git with ID: {commit_result}"
+                    )
+
+                except Exception as e:
+                    error_msg = f"Error committing database to Git: {str(e)}"
+                    await logger.error(error_msg)
+                    result["git_commit"] = {"success": False, "error": error_msg}
+
+        except Exception as e:
+            error_msg = f"Error during migration: {str(e)}"
+            await logger.error(error_msg)
+            result["message"] = error_msg
+            return result
+
+        await logger.info(
+            f"Migration process completed with success={result['success']}"
+        )
+        return result

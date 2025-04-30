@@ -859,11 +859,11 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
     async def run_migrations_with_logs(self, project_dir: Path, logger) -> dict:
         """
         Runs simplified database migrations while streaming logs to the provided logger.
-        
+
         Args:
             project_dir (Path): The root directory of the project
             logger: An async logger object to stream logs to
-            
+
         Returns:
             dict: Migration results
         """
@@ -890,13 +890,15 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
             conn = sqlite3.connect(str(sqlite_path))
             cursor = conn.cursor()
-            
+
             await logger.info("Database connection established successfully")
 
             # Get a list of existing tables
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
             existing_tables = [table[0] for table in cursor.fetchall()]
-            await logger.info(f"Detected {len(existing_tables)} existing tables in database")
+            await logger.info(
+                f"Detected {len(existing_tables)} existing tables in database"
+            )
 
             # Now, scan the models directory to find new models
             models_dir = project_dir / "models"
@@ -916,28 +918,36 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
                     # Add some delay to simulate processing time
                     await asyncio.sleep(0.2)
-                    
+
                     # Try to extract table name from the model
                     table_name_match = re.search(
                         r"__tablename__\s*=\s*['\"]([^'\"]+)['\"]", model_content
                     )
                     if table_name_match:
                         table_name = table_name_match.group(1)
-                        await logger.info(f"Found table name '{table_name}' in model definition")
+                        await logger.info(
+                            f"Found table name '{table_name}' in model definition"
+                        )
                     else:
                         # If no explicit table name, use the snake_case model name + 's'
                         snake_case = self._to_snake_case(model_name)
                         table_name = f"{snake_case}s"
-                        await logger.info(f"No explicit table name found, using '{table_name}'")
+                        await logger.info(
+                            f"No explicit table name found, using '{table_name}'"
+                        )
 
                     # Check if this table already exists
                     if table_name in existing_tables:
-                        await logger.info(f"Table '{table_name}' already exists, skipping")
+                        await logger.info(
+                            f"Table '{table_name}' already exists, skipping"
+                        )
                         continue
 
                     # Try to extract the column definitions
                     try:
-                        await logger.info(f"Extracting column definitions for '{table_name}'")
+                        await logger.info(
+                            f"Extracting column definitions for '{table_name}'"
+                        )
                         # Analyze the model content to extract column definitions
                         columns = []
                         column_matches = re.finditer(
@@ -948,11 +958,15 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
                             column_name = match.group(1)
                             column_def = match.group(2)
                             columns.append((column_name, column_def))
-                            await logger.info(f"Found column: {column_name} ({column_def})")
+                            await logger.info(
+                                f"Found column: {column_name} ({column_def})"
+                            )
 
                         # Generate a CREATE TABLE statement
                         if columns:
-                            await logger.info(f"Generating CREATE TABLE statement for '{table_name}'")
+                            await logger.info(
+                                f"Generating CREATE TABLE statement for '{table_name}'"
+                            )
                             create_table_sql = (
                                 f"CREATE TABLE IF NOT EXISTS {table_name} (\n"
                             )
@@ -999,10 +1013,14 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
                             conn.commit()
 
                             tables_created.append(table_name)
-                            await logger.info(f"✅ Successfully created table: {table_name}")
+                            await logger.info(
+                                f"✅ Successfully created table: {table_name}"
+                            )
 
                     except Exception as e:
-                        error_msg = f"Error creating table from model {model_name}: {str(e)}"
+                        error_msg = (
+                            f"Error creating table from model {model_name}: {str(e)}"
+                        )
                         await logger.error(error_msg)
 
                 # Update result with tables created
@@ -1019,24 +1037,30 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
             conn.close()
             result["success"] = True
             result["database_path"] = str(sqlite_path)
-            
+
             # If we successfully updated the database, commit it to Git
             if result["success"] and sqlite_path.exists() and result["tables_created"]:
                 try:
                     # Get the project_id from the project_dir path
                     project_id = project_dir.name
-                    await logger.info(f"Committing changes to Git (project_id: {project_id})")
+                    await logger.info(
+                        f"Committing changes to Git (project_id: {project_id})"
+                    )
 
                     # Read the database as binary data
                     with open(sqlite_path, "rb") as f:
                         sqlite_data = f.read()
-                    await logger.info(f"Read {len(sqlite_data)} bytes from database file")
+                    await logger.info(
+                        f"Read {len(sqlite_data)} bytes from database file"
+                    )
 
                     relative_path = str(sqlite_path.relative_to(project_dir))
                     commit_message = f"Update SQLite database with new tables: {', '.join(tables_created)}"
 
                     # Use the GitService to commit the binary file
-                    await logger.info(f"Creating Git commit with message: {commit_message}")
+                    await logger.info(
+                        f"Creating Git commit with message: {commit_message}"
+                    )
                     commit_result = await GitService.commit_binary_file_update(
                         project_id=project_id,
                         binary_content=sqlite_data,
@@ -1050,7 +1074,9 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
                         "message": commit_message,
                     }
 
-                    await logger.info(f"✅ Successfully committed database to Git with ID: {commit_result}")
+                    await logger.info(
+                        f"✅ Successfully committed database to Git with ID: {commit_result}"
+                    )
 
                 except Exception as e:
                     error_msg = f"Error committing database to Git: {str(e)}"
@@ -1063,5 +1089,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
             result["message"] = error_msg
             return result
 
-        await logger.info(f"Migration process completed with success={result['success']}")
+        await logger.info(
+            f"Migration process completed with success={result['success']}"
+        )
         return result

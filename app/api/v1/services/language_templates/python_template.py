@@ -47,6 +47,66 @@ class PythonTemplate(LanguageTemplate):
         """
         return ["endpoint", "model", "schema", "migration", "helpers"]
 
+    def needs_schema(self, code: str) -> bool:
+        """
+        Check if the Python endpoint code references schema-related components.
+
+        Args:
+            code (str): The Python code to analyze
+
+        Returns:
+            bool: True if the code references schema components
+        """
+        if not code or not isinstance(code, str):
+            logger.warning("No valid endpoint code provided for schema detection")
+            return False
+
+        schema_patterns = [
+            r"from\s+schemas\s+import\s+\w+",  # e.g., from schemas import UserSchema
+            r"from\s+schemas\.(\w+)\s+import\s+\w+",  # e.g., from schemas.user import UserSchema
+            r"\w+Schema\s*\(",  # e.g., UserSchema(...)
+            r"\w+Schema\s*:",  # e.g., user: UserSchema
+            r"schema\s*=\s*\w+Schema",  # e.g., schema = UserSchema
+            r"validate_with_\w+Schema",  # e.g., validate_with_UserSchema
+        ]
+
+        logger.debug(f"Checking for schema references in endpoint code:\n{code[:1000]}...")  # Log first 1000 chars
+        for pattern in schema_patterns:
+            if re.search(pattern, code, re.IGNORECASE):
+                logger.info(f"Schema dependency detected with pattern: {pattern}")
+                return True
+        logger.debug("No schema dependencies detected in endpoint code")
+        return False
+
+    def needs_helpers(self, code: str) -> bool:
+        """
+        Check if the Python endpoint code references helper functions.
+
+        Args:
+            code (str): The Python code to analyze
+
+        Returns:
+            bool: True if the code references helper functions
+        """
+        if not code or not isinstance(code, str):
+            logger.warning("No valid endpoint code provided for helpers detection")
+            return False
+
+        helper_patterns = [
+            r"from\s+helpers\s+import\s+\w+",  # e.g., from helpers import user_utils
+            r"from\s+helpers\.(\w+)_helpers\s+import\s+\w+",  # e.g., from helpers.user_helpers import validate_user
+            r"\w+_helpers\.\w+",  # e.g., user_helpers.validate_user
+            r"helper_\w+",  # e.g., helper_validate_user
+        ]
+
+        logger.debug(f"Checking for helper references in endpoint code:\n{code[:1000]}...")  # Log first 1000 chars
+        for pattern in helper_patterns:
+            if re.search(pattern, code, re.IGNORECASE):
+                logger.info(f"Helper dependency detected with pattern: {pattern}")
+                return True
+        logger.debug("No helper dependencies detected in endpoint code")
+        return False
+
     def needs_database(self, code: str) -> bool:
         """
         Check if the Python endpoint code needs database models.

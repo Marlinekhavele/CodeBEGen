@@ -9,14 +9,52 @@ CodeBEGen is an AI-powered tool that enables developers to rapidly generate back
 
 ## Features
 
-- **Multi-language Support**: Generate backend code in various languages including Python, JavaScript, Java, Go, and more
+- **Multi-language Support**: Generate backend code in various languages including Python, JavaScript, other language are in future consideration
 - **AI-Powered Code Generation**: Automatically generate fully functional backend endpoints based on simple descriptions or specifications
-- **Framework Flexibility**: Support for popular frameworks like FastAPI, Express, Spring Boot, and others
+- **Framework Flexibility**: Support for popular frameworks like FastAPI, Express
 - **Intuitive UI**: User-friendly interface for specifying API requirements and generating code
 - **Agile-First Design**: Optimized for rapid iteration and continuous development
 - **Seamless Integration**: Easily integrate generated APIs into existing projects
 - **Comprehensive Documentation**: Auto-generated API documentation for all endpoints
 - **Full-Stack Solution**: Backend repository works with companion frontend repository for a complete development experience [FrontEnd Repo](https://github.com/Marlinekhavele/CodeFEGen)
+
+## System Design
+
+### 1. Frontend (Hosted on Droplet)
+- **Features**:
+  - UI for template selection (e.g., Python + FastAPI)
+  - AI-powered code generation (in-browser or via AI service)
+  - Sends generated code to the backend via API
+  - Displays test results and API documentation (fetched from backend)
+
+### 2. Backend (Hosted on Azure)
+- Receives generated code from frontend
+- Performs operations:
+  - Pushes code to Gitea
+  - Provides API testing endpoint (e.g., starts the server in a sandboxed/test environment)
+  - Generates and serves API documentation (e.g., using Swagger/OpenAPI from codebase)
+- Returns:
+  - Test results to frontend
+  - Downloadable archive of code (e.g., zip from Gitea repo)
+
+### 3. Gitea (Self-hosted Git)
+- Receives repos from backend (internal use)
+- Stores each generated project
+- Used by backend to pull for testing or archiving
+
+### User Journey Summary
+1. User logs in via frontend (Droplet)
+2. Selects language & framework template
+3. AI generates the code (frontend-side)
+4. Code sent to backend (Azure)
+5. Backend:
+   - Pushes code to Gitea
+   - Exposes test endpoint for execution
+   - Exposes API documentation
+6. Frontend:
+   - Displays test results
+   - Displays API documentation
+   - Provides download button (from backend-archived file)
 
 ## Getting Started
 
@@ -448,8 +486,8 @@ CodeBEGen uses a modular architecture with the following components:
 
 | Language   | Frameworks                          |
 |------------|-------------------------------------|
-| Python     | FastAPI, Flask, Django              |
-| JavaScript | Express.js, NestJS, Koa             |
+| Python     | FastAPI                             |
+| JavaScript | Express.js                          |
 
 
 ## Contributing

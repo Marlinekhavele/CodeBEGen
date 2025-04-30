@@ -71,7 +71,9 @@ class PythonTemplate(LanguageTemplate):
             r"validate_with_\w+Schema",  # e.g., validate_with_UserSchema
         ]
 
-        logger.debug(f"Checking for schema references in endpoint code:\n{code[:1000]}...")  # Log first 1000 chars
+        logger.debug(
+            f"Checking for schema references in endpoint code:\n{code[:1000]}..."
+        )  # Log first 1000 chars
         for pattern in schema_patterns:
             if re.search(pattern, code, re.IGNORECASE):
                 logger.info(f"Schema dependency detected with pattern: {pattern}")
@@ -100,7 +102,9 @@ class PythonTemplate(LanguageTemplate):
             r"helper_\w+",  # e.g., helper_validate_user
         ]
 
-        logger.debug(f"Checking for helper references in endpoint code:\n{code[:1000]}...")  # Log first 1000 chars
+        logger.debug(
+            f"Checking for helper references in endpoint code:\n{code[:1000]}..."
+        )  # Log first 1000 chars
         for pattern in helper_patterns:
             if re.search(pattern, code, re.IGNORECASE):
                 logger.info(f"Helper dependency detected with pattern: {pattern}")

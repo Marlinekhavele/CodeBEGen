@@ -1,6 +1,13 @@
-import json, time, logging, os, sys, importlib.util, subprocess
-from fastapi import HTTPException, status
+import importlib.util
+import json
+import logging
+import os
+import subprocess
+import sys
+import time
 from datetime import datetime
+
+from fastapi import HTTPException, status
 
 from app.api.v1.models.http_methods_test_endpoint import (
     TestRequestPayload,
@@ -17,11 +24,15 @@ class TestEndpointService:
 
     def __init__(self):
         # Directory where projects are stored
-        self.projects_dir = os.getenv("PROJECTS_DIR", os.path.join(os.getcwd(), "repos"))
+        self.projects_dir = os.getenv(
+            "PROJECTS_DIR", os.path.join(os.getcwd(), "repos")
+        )
         # Cache to keep track of already installed projects
         self.installed_projects = set()
 
-    async def execute_test(self, project_id: str, path: str, payload: TestRequestPayload, request_id: str) -> TestResponsePayload:
+    async def execute_test(
+        self, project_id: str, path: str, payload: TestRequestPayload, request_id: str
+    ) -> TestResponsePayload:
         """
         Execute a test request against a project endpoint
 
@@ -40,7 +51,7 @@ class TestEndpointService:
             logger.error(f"Project directory not found: {project_path}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Project '{project_id}' not found"
+                detail=f"Project '{project_id}' not found",
             )
 
         # Set up test client for the project
@@ -49,7 +60,7 @@ class TestEndpointService:
         if not os.path.exists(main_file_path):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"main.py not found in project '{project_id}'"
+                detail=f"main.py not found in project '{project_id}'",
             )
 
         # Install requirements if needed
@@ -72,11 +83,12 @@ class TestEndpointService:
             if app is None:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Could not find FastAPI app instance in project"
+                    detail="Could not find FastAPI app instance in project",
                 )
 
             # Create a test client
             from fastapi.testclient import TestClient
+
             client = TestClient(app)
             logger.info("Created test client for project FastAPI app")
 
@@ -97,19 +109,24 @@ class TestEndpointService:
             project_id: The ID of the project
         """
         requirements_path = os.path.join(project_path, "requirements.txt")
-        if os.path.exists(requirements_path) and project_id not in self.installed_projects:
+        if (
+            os.path.exists(requirements_path)
+            and project_id not in self.installed_projects
+        ):
             try:
                 # Install requirements
                 logger.info(f"Installing dependencies from {requirements_path}")
                 subprocess.run(
                     [sys.executable, "-m", "pip", "install", "-r", requirements_path],
                     check=True,
-                    capture_output=True
+                    capture_output=True,
                 )
                 self.installed_projects.add(project_id)
                 logger.info("Dependencies installed successfully")
             except subprocess.CalledProcessError as e:
-                logger.warning(f"Error installing dependencies: {e.stderr.decode() if e.stderr else 'Unknown error'}")
+                logger.warning(
+                    f"Error installing dependencies: {e.stderr.decode() if e.stderr else 'Unknown error'}"
+                )
 
     async def _import_main_module(self, main_file_path: str):
         """
@@ -122,7 +139,15 @@ class TestEndpointService:
             The imported main module
         """
         # List of common local module names that should not be pip-installed
-        LOCAL_MODULE_PREFIXES = ["schemas", "models", "helpers", "core", "utils", "config", "db"]
+        LOCAL_MODULE_PREFIXES = [
+            "schemas",
+            "models",
+            "helpers",
+            "core",
+            "utils",
+            "config",
+            "db",
+        ]
 
         try:
             spec = importlib.util.spec_from_file_location("main", main_file_path)
@@ -134,20 +159,28 @@ class TestEndpointService:
             missing_module = str(e).split("'")[1]
 
             # Check if this is likely a local module by examining the top-level package name
-            top_level_package = missing_module.split(".")[0] if "." in missing_module else missing_module
+            top_level_package = (
+                missing_module.split(".")[0]
+                if "." in missing_module
+                else missing_module
+            )
 
             if top_level_package in LOCAL_MODULE_PREFIXES:
                 # This is a local module, just log and continue without attempting to install
-                logger.info(f"Missing local module: {missing_module}, skipping installation")
+                logger.info(
+                    f"Missing local module: {missing_module}, skipping installation"
+                )
                 # Re-raise the exception to be handled by the caller
                 raise
             else:
                 # For non-local modules, attempt to install with pip
-                logger.info(f"Missing external module: {missing_module}, attempting to install")
+                logger.info(
+                    f"Missing external module: {missing_module}, attempting to install"
+                )
                 subprocess.run(
                     [sys.executable, "-m", "pip", "install", missing_module],
                     check=True,
-                    capture_output=True
+                    capture_output=True,
                 )
                 # Try loading the module again
                 spec = importlib.util.spec_from_file_location("main", main_file_path)
@@ -155,7 +188,9 @@ class TestEndpointService:
                 spec.loader.exec_module(main_module)
                 return main_module
 
-    async def _execute_request(self, client, path: str, payload: TestRequestPayload, request_id: str) -> TestResponsePayload:
+    async def _execute_request(
+        self, client, path: str, payload: TestRequestPayload, request_id: str
+    ) -> TestResponsePayload:
         """
         Execute the actual HTTP request using the test client
 
@@ -170,7 +205,9 @@ class TestEndpointService:
         """
         # Create request headers
         headers = payload.headers or {}
-        if payload.contentType and "content-type" not in {k.lower(): v for k, v in headers.items()}:
+        if payload.contentType and "content-type" not in {
+            k.lower(): v for k, v in headers.items()
+        }:
             headers["Content-Type"] = payload.contentType
 
         # Build URL with query parameters if any
@@ -184,7 +221,9 @@ class TestEndpointService:
         start_time = time.time()
 
         # Execute the appropriate HTTP method
-        response = await self._execute_http_method(client, method, url, headers, params, payload)
+        response = await self._execute_http_method(
+            client, method, url, headers, params, payload
+        )
 
         end_time = time.time()
         logger.info(f"Response received in {end_time - start_time:.4f} seconds")
@@ -216,7 +255,15 @@ class TestEndpointService:
             timestamp=datetime.utcnow(),
         )
 
-    async def _execute_http_method(self, client, method: str, url: str, headers: dict, params: dict, payload: TestRequestPayload):
+    async def _execute_http_method(
+        self,
+        client,
+        method: str,
+        url: str,
+        headers: dict,
+        params: dict,
+        payload: TestRequestPayload,
+    ):
         """
         Execute the specific HTTP method requested
 
@@ -234,13 +281,19 @@ class TestEndpointService:
         if method == "get":
             return client.get(url, headers=headers, params=params)
         elif method == "post":
-            return await self._handle_request_with_body(client.post, url, headers, params, payload)
+            return await self._handle_request_with_body(
+                client.post, url, headers, params, payload
+            )
         elif method == "put":
-            return await self._handle_request_with_body(client.put, url, headers, params, payload)
+            return await self._handle_request_with_body(
+                client.put, url, headers, params, payload
+            )
         elif method == "delete":
             return client.delete(url, headers=headers, params=params)
         elif method == "patch":
-            return await self._handle_request_with_body(client.patch, url, headers, params, payload)
+            return await self._handle_request_with_body(
+                client.patch, url, headers, params, payload
+            )
         elif method == "head":
             return client.head(url, headers=headers, params=params)
         elif method == "options":
@@ -248,10 +301,17 @@ class TestEndpointService:
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported HTTP method: {payload.httpMethod}"
+                detail=f"Unsupported HTTP method: {payload.httpMethod}",
             )
 
-    async def _handle_request_with_body(self, method_func, url: str, headers: dict, params: dict, payload: TestRequestPayload):
+    async def _handle_request_with_body(
+        self,
+        method_func,
+        url: str,
+        headers: dict,
+        params: dict,
+        payload: TestRequestPayload,
+    ):
         """
         Handle HTTP methods that can include a request body
 
@@ -272,11 +332,15 @@ class TestEndpointService:
                 except json.JSONDecodeError:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Invalid JSON string in requestBody"
+                        detail="Invalid JSON string in requestBody",
                     )
             else:
                 json_data = payload.requestBody
             return method_func(url, headers=headers, params=params, json=json_data)
         else:
-            data = payload.requestBody if not isinstance(payload.requestBody, dict) else json.dumps(payload.requestBody)
+            data = (
+                payload.requestBody
+                if not isinstance(payload.requestBody, dict)
+                else json.dumps(payload.requestBody)
+            )
             return method_func(url, headers=headers, params=params, data=data)

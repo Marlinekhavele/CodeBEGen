@@ -890,15 +890,15 @@ class CodeGenerationService:
         return component
 
     async def _generate_new_components(
-            self,
-            result: Dict[str, Any],
-            language_template,
-            project_id: str,
-            entity_name: str,
-            prompt: str,
-            primary_component: Dict[str, Any],
-            method: str,
-            endpoint_path: str,
+        self,
+        result: Dict[str, Any],
+        language_template,
+        project_id: str,
+        entity_name: str,
+        prompt: str,
+        primary_component: Dict[str, Any],
+        method: str,
+        endpoint_path: str,
     ) -> None:
         """
         Generate all new components for an entity using the unified entity name.
@@ -925,7 +925,9 @@ class CodeGenerationService:
         # Get endpoint component type
         endpoint_component = component_map.get("endpoint")
         if endpoint_component is None:
-            raise ValueError("Language template does not define an 'endpoint' component.")
+            raise ValueError(
+                "Language template does not define an 'endpoint' component."
+            )
 
         # Determine component dependencies
         endpoint_code = primary_component.get("generated_code", "")
@@ -933,10 +935,16 @@ class CodeGenerationService:
             logger.warning("No endpoint code provided for dependency analysis")
 
         needs_database = language_template.needs_database(endpoint_code)
-        needs_schema = language_template.needs_schema(endpoint_code) if hasattr(language_template,
-                                                                                'needs_schema') else False
-        needs_helpers = language_template.needs_helpers(endpoint_code) if hasattr(language_template,
-                                                                                  'needs_helpers') else False
+        needs_schema = (
+            language_template.needs_schema(endpoint_code)
+            if hasattr(language_template, "needs_schema")
+            else False
+        )
+        needs_helpers = (
+            language_template.needs_helpers(endpoint_code)
+            if hasattr(language_template, "needs_helpers")
+            else False
+        )
 
         logger.info(f"Dependency analysis for {entity_name}:")
         logger.info(f"  - needs_database: {needs_database}")
@@ -992,7 +1000,9 @@ class CodeGenerationService:
                 )
 
                 result[component_type] = component
-                logger.info(f"Generated {component_type} at {component.get('file_path')}")
+                logger.info(
+                    f"Generated {component_type} at {component.get('file_path')}"
+                )
 
                 if component_type == component_map.get("model"):
                     generated_code["model_code"] = component.get("generated_code", "")
@@ -1006,13 +1016,19 @@ class CodeGenerationService:
                 await self._notify_info(error_msg)
 
         # Handle migrations if needed
-        if needs_database and "migration" in required_components and "migration" in components_to_generate:
+        if (
+            needs_database
+            and "migration" in required_components
+            and "migration" in components_to_generate
+        ):
             logger.info("Generating migration as database is needed")
             await self._generate_migration(
                 project_id, entity_name, result, language_template
             )
         else:
-            logger.debug("Skipping migration generation (no database needed or not required)")
+            logger.debug(
+                "Skipping migration generation (no database needed or not required)"
+            )
 
     async def _generate_component(
         self,

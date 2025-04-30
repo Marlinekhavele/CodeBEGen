@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, status, Request
-import uuid, logging
+import logging
+import uuid
 
+from fastapi import APIRouter, HTTPException, status
 
 from app.api.v1.models.http_methods_test_endpoint import (
     TestRequestPayload,
@@ -36,12 +37,12 @@ async def test_project_endpoint(project_id: str, payload: TestRequestPayload):
     url = str(payload.endpointUrl)
 
     # Handle different URL formats
-    if url.startswith('/'):
+    if url.startswith("/"):
         # Simple path like "/health"
-        path = url.lstrip('/')
-    elif url.startswith(f'http://{project_id}/'):
+        path = url.lstrip("/")
+    elif url.startswith(f"http://{project_id}/"):
         # Project-specific URL like "http://{project_id}/{path}"
-        path = url.split('/', 3)[-1] if len(url.split('/', 3)) > 3 else ""
+        path = url.split("/", 3)[-1] if len(url.split("/", 3)) > 3 else ""
     else:
         # Assume it's just the path without leading slash
         path = url
@@ -54,10 +55,7 @@ async def test_project_endpoint(project_id: str, payload: TestRequestPayload):
 
         # Execute the test using the service
         response_data = await test_service.execute_test(
-            project_id=project_id,
-            path=path,
-            payload=payload,
-            request_id=request_id
+            project_id=project_id, path=path, payload=payload, request_id=request_id
         )
 
         logger.info(f"Request completed successfully: {response_data.statusCode}")
@@ -74,5 +72,5 @@ async def test_project_endpoint(project_id: str, payload: TestRequestPayload):
         return error_response(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             message="Error while testing project",
-            detail=str(e)
+            detail=str(e),
         )

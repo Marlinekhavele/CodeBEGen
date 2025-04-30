@@ -29,7 +29,3 @@ def root():
             "signup": "/signup (POST)"
         }
     }
-            "signup": "/signup (POST)",
-        },
-    }
-

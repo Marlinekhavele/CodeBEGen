@@ -213,6 +213,8 @@ IMPORTANT:
 4. ALWAYS include imports for ANY types, classes, or modules used in the model.
 5. For UUID columns, ALWAYS use 'from sqlalchemy.dialects.postgresql import UUID' and use UUID(as_uuid=True).
 6. If using Enum types, define the enum class and import enum module but if its best to avoid enum please do.
+7. Always import the necesaccy dependencies if being used in the code
+8. Use correct indentation when writing to avoid tests failing
 """
 # Step 3: Generate the Pydantic schemas
 SCHEMA_GENERATION_TEMPLATE = """
@@ -284,6 +286,8 @@ IMPORTANT:
 1.Return ONLY the Pydantic schema code for {entity_name}.
 2. Do not include any explanations, comments, or text after the code.
 3. The response should contain ONLY the code itself.
+4. Always import the necesaccy dependencies if being used in the code
+5. Use correct indentation when writing to avoid tests failing
 """
 # Step 4: Generate the Alembic migration
 MIGRATION_GENERATION_TEMPLATE = """
@@ -499,6 +503,8 @@ IMPORTANT:
 3. The code should be well-organized with proper docstrings and type hints.
 4. Include at least 3-5 useful helper functions that would be valuable for this entity.
 5. The response should contain ONLY the code itself.
+6. Always import the necesaccy dependencies if being used in the code
+7. Use correct indentation when writing to avoid tests failing
 """
 PYTHON_MODEL_CHANGES_TEMPLATE = """
 You are an expert SQLAlchemy developer helping to MODIFY an EXISTING database model.
@@ -545,4 +551,5 @@ IMPORTANT:
 4. For modifications, include the complete new Column definition.
 5. If adding an Enum type, use the existing Enum if one exists in the model, otherwise specify it properly in the Column definition.
 6. Do NOT suggest any changes to standard fields like id, created_at, updated_at.
+7. Use correct indentation when writing to avoid tests failing
 """

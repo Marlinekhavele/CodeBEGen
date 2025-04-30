@@ -335,6 +335,18 @@ class CodeGenerationService:
                         method,
                         endpoint_path,
                     )
+            else:
+                # Still generate non-database components (schema and helpers if needed)
+                await self._generate_new_components(
+                    result,
+                    language_template,
+                    project_id,
+                    entity_name,
+                    prompt,
+                    primary_component,
+                    method,
+                    endpoint_path,
+                )
 
             # Step 7: Generate Dockerfile - ALWAYS generate regardless of database needs
             try:
@@ -890,8 +902,8 @@ class CodeGenerationService:
     ) -> None:
         """
         Generate all new components for an entity using the unified entity name.
-        This method creates all necessary components for a new entity based on the
-        language template's requirements.
+        Conditionally generates schema and helpers based on endpoint code dependencies,
+        and skips model/migration if no database is needed.
 
         Args:
             result: Dictionary to store generation results
@@ -904,6 +916,7 @@ class CodeGenerationService:
             endpoint_path: URL path for the endpoint
         """
         await self._notify_info(f"Generating new components for {entity_name}")
+        logger.info(f"Starting component generation for entity: {entity_name}")
 
         # Get component information from language template
         component_map = language_template.get_component_map()
@@ -916,27 +929,64 @@ class CodeGenerationService:
                 "Language template does not define an 'endpoint' component."
             )
 
+        # Determine component dependencies
+        endpoint_code = primary_component.get("generated_code", "")
+        if not endpoint_code:
+            logger.warning("No endpoint code provided for dependency analysis")
+
+        needs_database = language_template.needs_database(endpoint_code)
+        needs_schema = (
+            language_template.needs_schema(endpoint_code)
+            if hasattr(language_template, "needs_schema")
+            else False
+        )
+        needs_helpers = (
+            language_template.needs_helpers(endpoint_code)
+            if hasattr(language_template, "needs_helpers")
+            else False
+        )
+
+        logger.info(f"Dependency analysis for {entity_name}:")
+        logger.info(f"  - needs_database: {needs_database}")
+        logger.info(f"  - needs_schema: {needs_schema}")
+        logger.info(f"  - needs_helpers: {needs_helpers}")
+
+        # Determine components to generate
+        components_to_generate = []
+        for component_type in required_components:
+            if component_type == endpoint_component:
+                logger.debug(f"Skipping {component_type} (already generated)")
+                continue
+            if component_type == "model" and not needs_database:
+                logger.debug(f"Skipping {component_type} (no database needed)")
+                continue
+            if component_type == "migration" and not needs_database:
+                logger.debug(f"Skipping {component_type} (no database needed)")
+                continue
+            if component_type == "schema" and not needs_schema:
+                logger.debug(f"Skipping {component_type} (no schema dependency)")
+                continue
+            if component_type == "helpers" and not needs_helpers:
+                logger.debug(f"Skipping {component_type} (no helper dependency)")
+                continue
+            components_to_generate.append(component_type)
+            logger.info(f"Scheduled to generate: {component_type}")
+
         # Keep track of generated code for dependencies
         generated_code = {
-            "endpoint_code": primary_component.get("generated_code", ""),
-            "controller_code": primary_component.get("generated_code", ""),
+            "endpoint_code": endpoint_code,
+            "controller_code": endpoint_code,
             "model_code": None,
         }
 
-        # Generate each required component except migrations (handled separately)
-        for component_type in required_components:
-            # Skip the primary component as we've already generated it
-            if component_type == endpoint_component or component_type == "migration":
-                continue
-
+        # Generate required components
+        for component_type in components_to_generate:
             try:
-                # Notify start of component generation
                 await self._notify_event(
                     "start", component_type, {"entity_name": entity_name}
                 )
                 logger.info(f"Generating {component_type} for {entity_name}")
 
-                # Generate the component with the unified entity name
                 component = await language_template.generate_component(
                     component_type=component_type,
                     project_id=project_id,
@@ -949,26 +999,35 @@ class CodeGenerationService:
                     endpoint_path=endpoint_path,
                 )
 
-                # Add to result
                 result[component_type] = component
+                logger.info(
+                    f"Generated {component_type} at {component.get('file_path')}"
+                )
 
-                # Store generated code for dependencies
                 if component_type == component_map.get("model"):
                     generated_code["model_code"] = component.get("generated_code", "")
 
-                # Notify completion of component generation
                 await self._notify_event("complete", component_type, component)
-                logger.info(f"Generated {component_type} successfully")
+                logger.info(f"Completed {component_type} generation")
 
             except Exception as e:
                 error_msg = f"Error generating {component_type}: {str(e)}"
                 logger.error(error_msg, exc_info=True)
                 await self._notify_info(error_msg)
 
-        # Now handle migrations separately using the appropriate method for the language
-        if "migration" in required_components:
+        # Handle migrations if needed
+        if (
+            needs_database
+            and "migration" in required_components
+            and "migration" in components_to_generate
+        ):
+            logger.info("Generating migration as database is needed")
             await self._generate_migration(
                 project_id, entity_name, result, language_template
+            )
+        else:
+            logger.debug(
+                "Skipping migration generation (no database needed or not required)"
             )
 
     async def _generate_component(

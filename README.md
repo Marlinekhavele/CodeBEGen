@@ -18,43 +18,44 @@ CodeBEGen is an AI-powered tool that enables developers to rapidly generate back
 - **Comprehensive Documentation**: Auto-generated API documentation for all endpoints
 - **Full-Stack Solution**: Backend repository works with companion frontend repository for a complete development experience [FrontEnd Repo](https://github.com/Marlinekhavele/CodeFEGen)
 
-## System Design
+## System Architecture
 
 ### 1. Frontend (Hosted on Droplet)
 - **Features**:
   - UI for template selection (e.g., Python + FastAPI)
-  - AI-powered code generation (in-browser or via AI service)
+  - AI-powered code generation
   - Sends generated code to the backend via API
-  - Displays test results and API documentation (fetched from backend)
+  - Displays test results and API documentation fetched from backend
 
 ### 2. Backend (Hosted on Azure)
 - Receives generated code from frontend
 - Performs operations:
   - Pushes code to Gitea
-  - Provides API testing endpoint (e.g., starts the server in a sandboxed/test environment)
-  - Generates and serves API documentation (e.g., using Swagger/OpenAPI from codebase)
+  - Provides API testing endpointstarts the server in a test environment using the test client
+  - Generates and serves API documentation  using Swagger
 - Returns:
   - Test results to frontend
-  - Downloadable archive of code (e.g., zip from Gitea repo)
+  - Downloadable archive of code 
 
 ### 3. Gitea (Self-hosted Git)
-- Receives repos from backend (internal use)
+- Receives repos from backend 
 - Stores each generated project
-- Used by backend to pull for testing or archiving
+- Used by backend to pull for testing and dowloading
 
 ### User Journey Summary
-1. User logs in via frontend (Droplet)
-2. Selects language & framework template
-3. AI generates the code (frontend-side)
-4. Code sent to backend (Azure)
+1. User logs in via frontend web app
+2. Selects language & framework template some will come later
+3. AI generates the code
+4. Code sent to backend 
 5. Backend:
    - Pushes code to Gitea
    - Exposes test endpoint for execution
    - Exposes API documentation
 6. Frontend:
-   - Displays test results
-   - Displays API documentation
-   - Provides download button (from backend-archived file)
+   - Displays test results 
+   - Displays API documentation of the generated code
+   - Provides download button where users can download the code locally and host on there own servers or push to there 
+   Github repos
 
 ## Getting Started
 

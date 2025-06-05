@@ -114,6 +114,20 @@ async def generate_code_stream(websocket: WebSocket, db: Session = Depends(get_d
         async def on_info(message):
             await websocket.send_json({"status": "info", "message": message})
 
+        async def on_migration_complete(component_type, result):
+            # Always send migration status and error (if any) to the frontend
+            status = result.get("migration_status", "unknown")
+            error = result.get("error")
+            await websocket.send_json(
+                {
+                    "status": "completed",
+                    "stage": component_type,
+                    "result": result,
+                    "migration_status": status,
+                    "migration_error": error,
+                }
+            )
+
         code_gen_service = CodeGenerationService(
             on_endpoint_start=lambda event, data: on_component_start("endpoint", data),
             on_endpoint_complete=lambda event, data: on_component_complete(
@@ -132,7 +146,7 @@ async def generate_code_stream(websocket: WebSocket, db: Session = Depends(get_d
             on_migration_start=lambda event, data: on_component_start(
                 "migration", data
             ),
-            on_migration_complete=lambda event, data: on_component_complete(
+            on_migration_complete=lambda event, data: on_migration_complete(
                 "migration", data
             ),
             on_dockerfile_start=lambda event, data: on_component_start(

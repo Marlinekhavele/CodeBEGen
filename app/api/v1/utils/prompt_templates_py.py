@@ -8,6 +8,13 @@ HTTP Method: {method}
 Endpoint Path: {endpoint_path}
 PROJECT CONTEXT:
 {additional_context}
+
+# RELATED ENDPOINTS CONTEXT
+{related_endpoints}
+
+# SIMILAR ENDPOINTS CONTEXT
+{similar_endpoints}
+
 # TASK: CREATE ENDPOINT ONLY
 Your task is to generate a FastAPI endpoint that implements the described functionality based on the description and context.
 Internally identify the main data entity (e.g., 'User', 'Product', 'Order') to ensure correct imports and helper function usage, but DO NOT explicitly state it in the output.
@@ -37,29 +44,101 @@ async def example_endpoint():
    - Include appropriate status codes (200 for GET, 201 for POST, etc.)
    - Return structured JSON responses
    - Always include a proper response_model for GET endpoints
+   - **CRITICAL**: For response_model, ALWAYS use EntitySchema, NEVER just Entity (e.g., use TodoSchema, not Todo)
 3. **Import Requirements**:
-   - Include only necessary imports based on the endpoint functionality
-   - If the endpoint requires database access:
-     - Import the model: `from models.book import Book` (Replace 'book' with the actual entity)
-     - Import the schema: `from schemas.book import BookSchema, BookCreate` (Replace 'book' with the actual entity)
-     - Import the helpers: `from helpers.book_helpers import get_all_books, get_book_by_id` (Replace 'book' with the actual entity)
-     - Import database session and dependency: `from sqlalchemy.orm import Session` and `from core.database import get_db`
-     - Use dependency injection for the session: `db: Session = Depends(get_db)` in the function signature.
+   - **CRITICAL**: Include ALL necessary imports based on what you actually use in the code
+   - **FastAPI Core Imports**: Always import what you use from fastapi:
+     - `APIRouter` - ALWAYS required for router = APIRouter()
+     - `Depends` - REQUIRED when using dependency injection (e.g., `db: Session = Depends(get_db)`)
+     - `HTTPException` - REQUIRED when raising HTTP exceptions (e.g., `raise HTTPException(status_code=404, ...)`)
+     - `status` - REQUIRED when using status codes (e.g., `status.HTTP_201_CREATED`, `status_code=status.HTTP_404_NOT_FOUND`)
+     - `Query`, `Path`, `Body` - REQUIRED when using these parameter types
+   - **Typing Imports**: Import from `typing` module when used:
+     - `List` - REQUIRED for endpoints returning multiple items (e.g., `response_model=List[BookSchema]`)
+     - `Optional`, `Dict`, `Any` - REQUIRED when used in type hints   - **Database-related Imports** (REQUIRED when endpoint uses database/Session):
+     - **CRITICAL**: Import the model: `from models.book import Book` (Replace 'book' with the actual entity) - ALWAYS REQUIRED when using database sessions
+     - **CRITICAL**: Import the schema: `from schemas.book import BookSchema, BookCreate` (Replace 'book' with the actual entity) - ALWAYS REQUIRED for database endpoints
+     - **CRITICAL**: ALWAYS use EntitySchema naming pattern (e.g., TodoSchema, ProductSchema, UserSchema). NEVER use just Entity (e.g., Todo, Product, User).
+     - **CRITICAL**: Import the helpers: `from helpers.book_helpers import get_all_books, get_book_by_id` (Replace 'book' with the actual entity) - ALWAYS REQUIRED when calling helper functions
+     - **CRITICAL**: Import database session and dependency: `from sqlalchemy.orm import Session` and `from core.database import get_db` - ALWAYS REQUIRED when using `db: Session = Depends(get_db)`
+     - **CRITICAL**: Use dependency injection for the session: `db: Session = Depends(get_db)` in the function signature for ALL database endpoints.
+   - **Import Logic**: If you use ANY function, class, or constant in your code, you MUST import it. Never use undefined imports.
    - If the endpoint is NOT database-dependent, do NOT import database modules (`Session`, `get_db`, models, schemas, helpers requiring db).
-   - Always import `List` from `typing` for GET endpoints returning multiple items.
+   - Always import `List` from `typing` for GET/POST endpoints returning multiple items.
 4. **Helper Functions**:
    - Assume there are helper functions available in `helpers/[entity]_helpers.py`
    - Use these helper functions in your implementation instead of direct queries when appropriate
    - For database endpoints: use `get_all_books(db)` instead of `db.query(Book).all()`
    - For non-database endpoints: use appropriate utility functions without database parameters
+   - **CRITICAL**: Every helper function you call in your endpoint code MUST be imported. If you use `get_book_by_id(db, book_id)`, you MUST import `get_book_by_id` from the helpers module.
+   - **CRITICAL**: If you use `create_book(db=db, book=book)`, you MUST import `create_book` from the helpers module.
+   - **CRITICAL**: If you use `update_book(db, book_id, book_data)`, you MUST import `update_book` from the helpers module.
+   - **CRITICAL**: If you use `delete_book(db, book_id)`, you MUST import `delete_book` from the helpers module.
 
 # CRITICAL NAMING INSTRUCTION:
 # The schema class names you import (e.g., `from schemas.product import ProductSchema`)
 # and helper function names you call (e.g., `from helpers.product_helpers import get_product`)
 # WILL DICTATE the exact names that *must* be implemented in subsequent generation steps.
 # Use clear, conventional names based on the inferred entity (e.g., `ProductSchema`, `ProductCreate`, `get_all_products`, `create_product`).
+# CRITICAL: ALWAYS use the EntitySchema naming pattern for response models (e.g., TodoSchema, ProductSchema, UserSchema).
+# NEVER use just the entity name (e.g., Todo, Product, User) for schema imports or response_model declarations.
 
-# --- ILLUSTRATIVE EXAMPLE ONLY ---
+# CRITICAL DATABASE IMPORT RULE:
+# **IF YOUR ENDPOINT USES A DATABASE SESSION (`db: Session = Depends(get_db)`), YOU MUST:**
+# 1. Import the model: `from models.[entity] import [Entity]` (e.g., `from models.book import Book`)
+# 2. Import the schema: `from schemas.[entity] import [Entity]Schema, [Entity]Create` (e.g., `from schemas.book import BookSchema, BookCreate`)
+# 3. Import helper functions: `from helpers.[entity]_helpers import [functions]` (e.g., `from helpers.book_helpers import get_all_books, create_book`)
+# 4. Import database dependencies: `from sqlalchemy.orm import Session` and `from core.database import get_db`
+#
+# **NO DATABASE SESSION = NO MODEL IMPORTS NEEDED**
+# **DATABASE SESSION PRESENT = MODEL IMPORTS MANDATORY**
+
+# IMPORT-USAGE CONSISTENCY RULE:
+# BEFORE writing your imports, first write your endpoint logic, then identify ALL functions you use.
+# Your import statements must include EVERY helper function you call in your code.
+# Common helper function patterns:
+# - get_all_[entity_plural](db) → must import get_all_[entity_plural]
+# - get_[entity]_by_id(db, id) → must import get_[entity]_by_id
+# - create_[entity](db, data) → must import create_[entity]
+# - update_[entity](db, id, data) → must import update_[entity]
+# - delete_[entity](db, id) → must import delete_[entity]
+
+# IMPORT MAPPING - ALWAYS USE THESE PATTERNS:
+When your code contains these patterns, you MUST include these imports:
+
+**FastAPI Components:**
+- `router = APIRouter()` → `from fastapi import APIRouter`
+- `Depends(get_db)` → `from fastapi import Depends`
+- `raise HTTPException(...)` → `from fastapi import HTTPException`
+- `status.HTTP_*` or `status_code=status.HTTP_*` → `from fastapi import status`
+- `Query(...)`, `Path(...)`, `Body(...)` → `from fastapi import Query, Path, Body`
+
+**Typing Components:**
+- `List[SomeType]` → `from typing import List`
+- `Optional[SomeType]` → `from typing import Optional`
+- `Dict[str, Any]` → `from typing import Dict, Any`
+
+**Database Components:**
+- `Session` type hint → `from sqlalchemy.orm import Session`
+- `get_db` function → `from core.database import get_db`
+- **CRITICAL**: `db: Session = Depends(get_db)` → MUST import `from models.[entity] import [Entity]` (e.g., `from models.book import Book`)
+- **CRITICAL**: ANY database endpoint → MUST import the model class (e.g., `from models.book import Book`)
+
+**Status Code Examples:**
+- `status_code=200` → Use `status_code=200` (no import needed)
+- `status_code=status.HTTP_201_CREATED` → `from fastapi import status`
+- `status_code=status.HTTP_404_NOT_FOUND` → `from fastapi import status`
+
+**Error Handling Examples:**
+- `raise HTTPException(status_code=404, detail="Not found")` → `from fastapi import HTTPException`
+- `raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bad request")` → `from fastapi import HTTPException, status`
+
+**Schema Import Examples:**
+- `response_model=TodoSchema` → `from schemas.todo import TodoSchema`
+- `response_model=List[ProductSchema]` → `from schemas.product import ProductSchema` and `from typing import List`
+- NEVER use `from schemas.todo import Todo` - ALWAYS use `from schemas.todo import TodoSchema`
+
+# --- ILLUSTRATIVE EXAMPLE ---
 The following code examples demonstrate the expected structure and principles.
 Adapt these principles to the specific requirements of the current request. Do NOT simply copy the example code.
 
@@ -72,7 +151,7 @@ from typing import List
 from core.database import get_db  # Import get_db
 from models.book import Book
 from schemas.book import BookSchema, BookCreate
-from helpers.book_helpers import get_all_books, get_book_by_id, create_book
+from helpers.book_helpers import get_all_books, get_book_by_id, create_book  # Import ALL helper functions used in the code
 
 router = APIRouter()
 
@@ -85,6 +164,17 @@ async def get_books(
     books = get_all_books(db)
     return books
 
+@router.get("/books/{book_id}", status_code=200, response_model=BookSchema)
+async def get_book(
+    book_id: int,
+    db: Session = Depends(get_db)
+):
+    \"\"\"Get book by ID\"\"\"
+    book = get_book_by_id(db, book_id)  # This function is imported above
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    return book
+
 @router.post("/books", status_code=status.HTTP_201_CREATED, response_model=BookSchema)
 async def create_new_book(
     book: BookCreate,
@@ -92,7 +182,7 @@ async def create_new_book(
 ):
     \"\"\"Create a new book\"\"\"
     # Pass db session to the helper function
-    new_book = create_book(db=db, book=book)
+    new_book = create_book(db=db, book=book)  # This function is imported above
     if not new_book: # Example error handling if helper indicates failure
         raise HTTPException(status_code=400, detail="Book could not be created")
     return new_book
@@ -112,13 +202,47 @@ async def health_check():
 IMPORTANT:
 1. Return ONLY the Python code for the endpoint.
 2. Assume models, schemas, and helper functions for the relevant entity/entities will be generated in other steps or already exist.
-3. Do not include any explanations, comments, or text before or after the code block.
-4. ALWAYS include the correct imports for any models (`models.<entity_lower>`), schemas (`schemas.<entity_lower>`), and helper functions (`helpers.<entity_lower>_helpers`) used.
+3. Do not include any explanations, comments, or text before or after the code block itself.
+4. **CRITICAL - COMPLETE IMPORTS**: ALWAYS include ALL necessary imports for ANY function, class, constant, or module you use in the code:
+   - `from fastapi import APIRouter` - ALWAYS required
+   - `from core.database import get_db` - REQUIRED when using `Depends(get_db)`
+   - `from fastapi import Depends` - REQUIRED when using `Depends(get_db)`
+   - `from fastapi import HTTPException` - REQUIRED when using `raise HTTPException(...)`
+   - `from fastapi import status` - REQUIRED when using `status.HTTP_*` constants
+   - `from typing import List` - REQUIRED when using `List[SomeType]`
+   - Any other imports based on what you actually use in the code
 5. ALWAYS use helper functions (e.g., `get_all_<entity_plural>(db)`) in your implementation when appropriate, inferring the entity name from the description and passing the `db` session if required.
 6. For GET requests returning multiple items, use `response_model=List[<EntitySchema>]`.
 7. Always remove the ```python ``` markdown from the start and end of the code block itself.
 8. ONLY include database imports (`core.database.get_db`, `sqlalchemy.orm.Session`, models, schemas, db-dependent helpers) for endpoints that need database access based on the description. Ensure `db: Session = Depends(get_db)` is used in the function signature for these endpoints.
+9. **ERROR HANDLING**: When implementing error handling (e.g., checking if a resource exists), ALWAYS import `HTTPException` and use appropriate status codes.
+10. **SPECIFIC PATTERNS TO WATCH FOR**:
+    - If you write `raise HTTPException(...)` → MUST import `from fastapi import HTTPException`
+    - If you write `status.HTTP_*` → MUST import `from fastapi import status`
+    - If you write `List[...]` → MUST import `from typing import List`
+    - If you write `Depends(...)` → MUST import `from fastapi import Depends`
+    - If you write `db: Session` → MUST import `from sqlalchemy.orm import Session`
+    - If you write `db: Session = Depends(get_db)` → MUST import `from core.database import get_db`
+    - **CRITICAL**: If you write `db: Session = Depends(get_db)` → MUST ALSO import the model: `from models.[entity] import [Entity]`
+11. **FUNCTION-IMPORT CONSISTENCY CHECK**:
+    - Before finalizing your code, scan through ALL function calls in your endpoint logic
+    - For EVERY helper function you call (e.g., `get_book_by_id`, `create_book`, `update_book`, `delete_book`), ensure it's included in your import statement
+    - For EVERY helper function you call (e.g., `get_book_by_id`, `create_book`, `update_book`, `delete_book`), ensure it's included in your import statement
+    - Example: If your code contains `existing_book = get_book_by_id(db, book_id)`, your imports MUST include:
+      ```python
+      from helpers.book_helpers import get_all_books, get_book_by_id, create_book
+      ```
+    - Example: If your code contains `new_item = create_item(db=db, item=item_data)`, your imports MUST include:
+      ```python
+      from helpers.item_helpers import create_item
+      ```
+12. **FINAL VERIFICATION**: After writing your endpoint code, review ALL function calls and ensure each has a corresponding import. This is the most common source of import errors.
+13. **DATABASE SESSION VERIFICATION**:
+    - **CRITICAL**: If your endpoint has `db: Session = Depends(get_db)`, you MUST import the model class (e.g., `from models.book import Book`)
+    - **CRITICAL**: If your endpoint has `db: Session = Depends(get_db)`, you MUST import the schema classes (e.g., `from schemas.book import BookSchema, BookCreate`)
+    - **CRITICAL**: Database endpoints without model imports will cause runtime errors
 """
+
 # Step 2: Generate the SQLAlchemy model
 MODEL_GENERATION_TEMPLATE = """
 You are an expert SQLAlchemy developer helping to create a database model.
@@ -147,29 +271,27 @@ Your task is to create a SQLAlchemy model for this entity that will work with Fa
    - Include nullable, unique, index constraints as needed
    - Add relationships to other models if necessary
    - ALWAYS import ANY type you use (SQLAlchemy types, Python modules, etc.)
+   - If you use Boolean, Integer, DateTime, ForeignKey, UUID, or any other type, ALWAYS import it explicitly in the import line.
 
 3. **Import Requirements**:
-   - For UUID columns, import UUID from sqlalchemy.dialects.postgresql
-   - For relationships, import relationship from sqlalchemy.orm
-   - For timestamp default values, import func from sqlalchemy.sql
+   - For ID columns, use String type with UUID strings for SQLite compatibility
+   - For relationships, import relationship from sqlalchemy.orm- For timestamp default values, import datetime from datetime module
    - Import any enum classes if you use Enum types
    - Import datetime if you use datetime objects
-   - Import uuid for UUID generation
+   - Import uuid for UUID generation   - **CRITICAL:** If you use any SQLAlchemy type (e.g., Boolean, Integer, DateTime, ForeignKey, Float, etc.), you MUST import it in the import line: `from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, ...` as needed.
+   - **CRITICAL:** For timestamp columns, ALWAYS use `Column(DateTime, default=datetime.utcnow)` NOT `Column(func.now())`
 
 4. **Reserved Names**:
    - **CRITICAL:** Do NOT use reserved SQLAlchemy attribute names like 'metadata', 'registry', 'query', 'query_class' for your column or relationship names. Choose alternative names if the entity description suggests these.
 
-
-# --- ILLUSTRATIVE EXAMPLE ONLY ---
+# --- ILLUSTRATIVE EXAMPLE ---
 The following code example demonstrates the expected structure and principles for a User model.
 Adapt these principles to the specific requirements of the current entity ({entity_name}). Do NOT simply copy the example code.
 
 # CODE EXAMPLE
 ```python
 from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Float, Text, JSON, Date, Time, Enum, LargeBinary
-from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 from core.database import Base
 import uuid
 import enum
@@ -183,38 +305,70 @@ class UserRole(enum.Enum):
 class User(Base):
     __tablename__ = "users"
 
-    # Primary key using UUID
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Primary key using String (SQLite-compatible UUID)
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
 
     # Basic fields
     username = Column(String, unique=True, nullable=False, index=True)
     email = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
-    is_active = Column(Boolean, default=True)
-
-    # Enum example
+    is_active = Column(Boolean, default=True)    # Enum example
     role = Column(Enum(UserRole), nullable=False, default=UserRole.USER)
 
-    # JSON data
-    preferences = Column(JSONB, nullable=True)
-
-    # Timestamps
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    # JSON data - use standard JSON for SQLite compatibility
+    preferences = Column(JSON, nullable=True)# Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationship example
     posts = relationship("Post", back_populates="author")
     profile = relationship("UserProfile", back_populates="user", uselist=False)
 ```
+# FOREIGN KEY RELATIONSHIP RULES:
+1. **Conservative Foreign Key Usage**:
+   - Only create foreign key relationships if you're certain the referenced table exists
+   - Use descriptive comments for foreign key relationships
+   - Prefer nullable foreign keys to avoid constraint violations
+
+2. **Foreign Key Best Practices**:
+   - Use this format: `Column(Integer, ForeignKey('table_name.id'), nullable=True)`
+   - Always include nullable=True for foreign keys unless absolutely required
+   - Add comments explaining the relationship
+
+3. **Referenced Table Naming**:
+   - Use lowercase, plural table names (e.g., 'users', 'categories', 'publishers')
+   - Ensure referenced column exists (usually 'id')
+
+   EXAMPLE OF SAFE FOREIGN KEY:
+```python
+class Book(Base):
+    __tablename__ = "books"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+
+    # Foreign key to publishers table (nullable to avoid constraint errors)
+    publisher_id = Column(Integer, ForeignKey('publishers.id'), nullable=True, comment="Reference to publisher")
+
+    # Relationship (optional, can be added later)
+    # publisher = relationship("Publisher", back_populates="books")
+```
+
+
 IMPORTANT:
 1. Return ONLY the SQLAlchemy model code for {entity_name}.
 2. Do not include any explanations, comments, or text after the code.
 3. The response should contain ONLY the code itself.
 4. ALWAYS include imports for ANY types, classes, or modules used in the model.
-5. For UUID columns, ALWAYS use 'from sqlalchemy.dialects.postgresql import UUID' and use UUID(as_uuid=True).
+5. For ID columns, use String type with UUID string as default: `Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))`.
 6. If using Enum types, define the enum class and import enum module but if its best to avoid enum please do.
 7. Always import the necesaccy dependencies if being used in the code
 8. Use correct indentation when writing to avoid tests failing
+IMPORTANT :
+- Make foreign keys nullable=True to prevent constraint violations
+- Add descriptive comments for all foreign key relationships
+- Use standard naming conventions for referenced tables
+- Consider whether the referenced table actually exists in the project
 """
 # Step 3: Generate the Pydantic schemas
 SCHEMA_GENERATION_TEMPLATE = """

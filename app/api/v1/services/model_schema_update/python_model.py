@@ -263,6 +263,7 @@ class PythonModelUpdater(ModelUpdater):
     ) -> Tuple[str, Dict[str, Any]]:
         """
         Update a SQLAlchemy model with the specified changes
+        Ensures all required SQLAlchemy types are imported (e.g., Boolean, DateTime, etc.).
 
         Args:
             model_path: Path to the model file
@@ -419,6 +420,48 @@ class PythonModelUpdater(ModelUpdater):
         # Join the lines back into a single string
         updated_code = "\n".join(lines)
 
+        # Detect all used SQLAlchemy types in the model (including new fields)
+        used_types = set()
+        matches = re.findall(r"Column\(([^)]*)\)", updated_code)
+        for match in matches:
+            for type_candidate in [
+                "String",
+                "Integer",
+                "DateTime",
+                "Boolean",
+                "Float",
+                "ForeignKey",
+                "UUID",
+            ]:
+                if type_candidate in match:
+                    used_types.add(type_candidate)
+        # Parse existing imports
+        lines = updated_code.splitlines()
+        import_lines = [
+            i
+            for i, l in enumerate(lines)
+            if l.strip().startswith("from sqlalchemy import")
+        ]
+        if import_lines:
+            import_idx = import_lines[0]
+            import_line = lines[import_idx]
+            # Add missing types to the import line
+            for t in used_types:
+                if t not in import_line:
+                    import_line = import_line.rstrip() + f", {t}"
+            lines[import_idx] = import_line
+            updated_content = "\n".join(lines)
+        else:
+            # If no import line, add one at the top after any docstring or comments
+            insert_idx = 0
+            for i, l in enumerate(lines):
+                if not l.strip().startswith("#") and l.strip():
+                    insert_idx = i
+                    break
+            import_line = "from sqlalchemy import Column, String, Integer, DateTime, Boolean, Float, ForeignKey, UUID"
+            lines.insert(insert_idx, import_line)
+            updated_content = "\n".join(lines)
+
         # Create the change summary
         changes_made = (
             len(added_fields)
@@ -435,4 +478,25 @@ class PythonModelUpdater(ModelUpdater):
             "renamed_fields": renamed_fields,
         }
 
-        return updated_code, change_summary
+        # Before writing the updated model, ensure referenced models exist
+        models_dir = model_path.parent
+        self.ensure_referenced_models_exist(existing_model_code, models_dir)
+
+        return updated_content, change_summary
+
+    @staticmethod
+    def ensure_referenced_models_exist(model_code: str, models_dir: Path):
+        """
+        Scan model_code for ForeignKey references and ensure referenced models exist.
+        If not, generate a minimal model for the referenced table.
+        """
+        import re
+
+        foreign_keys = re.findall(r"ForeignKey\([\'\"](\w+)\.id[\'\"]", model_code)
+        for table in set(foreign_keys):
+            model_file = models_dir / f"{table}.py"
+            if not model_file.exists():
+                # Generate a minimal model for the referenced table
+                minimal_model = f"""from sqlalchemy import Column, String\nfrom core.database import Base\n\nclass {table.capitalize()}(Base):\n    __tablename__ = \"{table}s\"\n    id = Column(String, primary_key=True)\n"""
+                model_file.write_text(minimal_model)
+                print(f"Generated missing referenced model: {table}")

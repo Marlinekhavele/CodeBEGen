@@ -1,5 +1,6 @@
 import logging
-from typing import Dict, Optional
+from pathlib import Path
+from typing import Dict, Optional, Union
 
 from langchain.prompts import PromptTemplate
 
@@ -12,6 +13,8 @@ class PromptManager:
     # Store templates after loading and processing them
     _templates: Dict[str, Dict[str, PromptTemplate]] = {}
     _initialized: bool = False
+    _project_context_enabled: bool = False
+    _project_path: Optional[Path] = None
 
     @staticmethod
     def load_templates():
@@ -56,9 +59,8 @@ class PromptManager:
         # Process templates to escape literal curly braces
         # This is necessary when templates contain code examples with curly braces
         def escape_template_braces(template_string):
-            import re
+            import re  # Define valid placeholders in the template
 
-            # Define valid placeholders in the template
             placeholders = [
                 "endpoint_description",
                 "method",
@@ -76,6 +78,7 @@ class PromptManager:
                 "existing_model_code",
                 "endpoint_context",
                 "project_id",
+                "related_endpoints",
             ]
 
             # Create a pattern to identify valid placeholders
@@ -91,18 +94,25 @@ class PromptManager:
             for placeholder in placeholders:
                 temp = temp.replace(f"###{placeholder}###", f"{{{placeholder}}}")
 
-            return temp
+            return temp  # Initialize the templates dictionary with escaped templates
 
-        # Initialize the templates dictionary with escaped templates
         PromptManager._templates = {
             "python": {
-                "endpoint": PromptTemplate.from_template(ENDPOINT_GENERATION_TEMPLATE),
-                "model": PromptTemplate.from_template(MODEL_GENERATION_TEMPLATE),
-                "schema": PromptTemplate.from_template(SCHEMA_GENERATION_TEMPLATE),
-                "migration": PromptTemplate.from_template(
-                    MIGRATION_GENERATION_TEMPLATE
+                "endpoint": PromptTemplate.from_template(
+                    escape_template_braces(ENDPOINT_GENERATION_TEMPLATE)
                 ),
-                "helpers": PromptTemplate.from_template(HELPER_FUNCTIONS_TEMPLATE),
+                "model": PromptTemplate.from_template(
+                    escape_template_braces(MODEL_GENERATION_TEMPLATE)
+                ),
+                "schema": PromptTemplate.from_template(
+                    escape_template_braces(SCHEMA_GENERATION_TEMPLATE)
+                ),
+                "migration": PromptTemplate.from_template(
+                    escape_template_braces(MIGRATION_GENERATION_TEMPLATE)
+                ),
+                "helpers": PromptTemplate.from_template(
+                    escape_template_braces(HELPER_FUNCTIONS_TEMPLATE)
+                ),
                 "model_changes": PromptTemplate.from_template(
                     escape_template_braces(PYTHON_MODEL_CHANGES_TEMPLATE)
                 ),
@@ -172,6 +182,8 @@ class PromptManager:
         # Convert language to lowercase for consistency
         language = language.lower()
 
+        logger.info(f"📚 Available languages: {list(PromptManager._templates.keys())}")
+
         # If we don't have templates for the requested language, fallback to python
         if language not in PromptManager._templates:
             logger.warning(
@@ -179,14 +191,29 @@ class PromptManager:
             )
             language = "python"
 
+        logger.info(f"🎯 Using language: '{language}'")
+        logger.info(
+            f"📖 Available templates for '{language}': {list(PromptManager._templates[language].keys())}"
+        )
+
         # Get the template for the specified language
         if template_name in PromptManager._templates[language]:
-            return PromptManager._templates[language][template_name]
+            template = PromptManager._templates[language][template_name]
+            template_preview = (
+                str(template.template)[:150] + "..."
+                if len(str(template.template)) > 150
+                else str(template.template)
+            )
+            logger.info(
+                f"✅ Found template '{template_name}' for '{language}': {template_preview}"
+            )
+            return template
 
-        logger.error(f"Template '{template_name}' not found for language '{language}'")
-        return None
+        logger.error(
+            f"❌ Template '{template_name}' not found for language '{language}'"
+        )
+        return None @ staticmethod
 
-    @staticmethod
     def format_template(template_name: str, language: str, **kwargs) -> str:
         """
         Format a template with the provided variables.
@@ -202,15 +229,46 @@ class PromptManager:
         Raises:
             ValueError: If the template is not found
         """
+        # Debug logging to trace template selection
+
         template = PromptManager.get_template(template_name, language)
         if not template:
+            logger.error(
+                f"❌ Template '{template_name}' not found for language '{language}'"
+            )
             raise ValueError(
                 f"Template '{template_name}' not found for language '{language}'"
             )
 
+        # Log which template was actually retrieved
+        template_preview = (
+            str(template.template)[:150] + "..."
+            if len(str(template.template)) > 150
+            else str(template.template)
+        )
+        logger.info(f"✅ Retrieved template preview: {template_preview}")
+
+        # Check if this is a JavaScript template being used for Python
+        if language == "python" and (
+            "const " in template_preview or "module.exports" in template_preview
+        ):
+            logger.error(
+                f"❌ CRITICAL BUG: JavaScript template retrieved for Python! Template content: {template_preview}"
+            )
+
         # Include language in the formatting kwargs
         format_kwargs = {"language": language, **kwargs}
-        return template.format(**format_kwargs)
+        formatted_result = template.format(**format_kwargs)
+
+        # Log the first part of the formatted result
+        result_preview = (
+            formatted_result[:150] + "..."
+            if len(formatted_result) > 150
+            else formatted_result
+        )
+        logger.info(f"📝 Formatted template preview: {result_preview}")
+
+        return formatted_result
 
     @staticmethod
     def add_custom_template(
@@ -238,9 +296,8 @@ class PromptManager:
 
         # Process the template to escape curly braces properly
         def escape_template_braces(template_string):
-            import re
+            import re  # Define valid placeholders in the template
 
-            # Define valid placeholders in the template
             placeholders = [
                 "endpoint_description",
                 "method",
@@ -254,6 +311,7 @@ class PromptManager:
                 "model_code",
                 "schema_code",
                 "latest_migration_id",
+                "related_endpoints",
             ]
 
             # Create a pattern to identify valid placeholders
@@ -278,3 +336,63 @@ class PromptManager:
         logger.info(
             f"Added custom template '{template_name}' for language '{language}'"
         )
+
+    @staticmethod
+    def enable_project_context(project_path: Union[str, Path]) -> None:
+        """
+        Enable project structure context in prompts.
+
+        Args:
+            project_path: Path to the project root
+        """
+        PromptManager._project_context_enabled = True
+        PromptManager._project_path = Path(project_path)
+        logger.info(f"Project context enabled with path: {project_path}")
+
+    @staticmethod
+    def disable_project_context() -> None:
+        """Disable project structure context in prompts."""
+        PromptManager._project_context_enabled = False
+        PromptManager._project_path = None
+        logger.info("Project context disabled")
+
+    @staticmethod
+    def get_template_with_context(
+        template_name: str, language: str = "python"
+    ) -> Optional[PromptTemplate]:
+        """
+        Get a template with project context if enabled.
+
+        Args:
+            template_name: The name of the template to retrieve
+            language: The programming language to use
+
+        Returns:
+            Optional[PromptTemplate]: The template with project context if enabled
+        """
+        template = PromptManager.get_template(template_name, language)
+
+        if not template:
+            return None
+
+        if (
+            not PromptManager._project_context_enabled
+            or not PromptManager._project_path
+        ):
+            return template
+
+        try:
+            from app.api.v1.utils.project_context_manager import ProjectContextManager
+
+            # Enhance the template with project context
+            enhanced_template = (
+                ProjectContextManager.enhance_prompt_with_project_context(
+                    template, PromptManager._project_path
+                )
+            )
+
+            return enhanced_template
+
+        except Exception as e:
+            logger.error(f"Error enhancing template with project context: {e}")
+            return template

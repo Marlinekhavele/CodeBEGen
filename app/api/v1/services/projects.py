@@ -142,9 +142,9 @@ class ProjectInitService:
         project_url = f"https://{slug}.{settings.CODE_BE_GEN_BASE_URL}"
 
         language = init_request.language
-        framework = init_request.framework
-
-        # Create Gitea repository (if credentials are provided)
+        framework = (
+            init_request.framework
+        )  # Create Gitea repository (if credentials are provided)
         repo_url = ""
         if settings.GITEA_TOKEN:
             try:
@@ -164,18 +164,32 @@ class ProjectInitService:
                 configure_git_for_project(project_dir)
 
                 # Update the git remote to point to the new repository
-                update_git_remote(project_dir, repo_url)
-
-                # Push the code to the new repository
+                update_git_remote(
+                    project_dir, repo_url
+                )  # Push the code to the new repository
                 push_to_remote(project_dir)
 
                 logger.info(
                     f"Successfully initialized project {slug} with repository {repo_url}"
                 )
             except Exception as e:
-                # Log the error but continue with the process
-                logger.error(f"Error during repository setup: {str(e)}")
-                # If we have a partial repo_url but the process failed, we should still return it
+                # Repository setup failed - this should be a hard failure
+                error_msg = f"Failed to initialize project repository: {str(e)}"
+                logger.error(error_msg)
+                # Clean up the project directory since repository creation failed
+                try:
+                    import shutil
+
+                    if "project_dir" in locals():
+                        shutil.rmtree(project_dir)
+                        logger.info(f"Cleaned up project directory: {project_dir}")
+                except Exception as cleanup_error:
+                    logger.warning(
+                        f"Failed to clean up project directory: {cleanup_error}"
+                    )
+                raise Exception(error_msg)
+        else:
+            logger.warning("No Gitea token provided - skipping repository creation")
 
         # Create a proper URL with the slug and base URL
         project_url = f"https://{slug}.{settings.CODE_BE_GEN_BASE_URL}"
@@ -210,7 +224,10 @@ class ProjectInitService:
             except Exception as e:
                 logger.error(f"Error creating project record: {str(e)}", exc_info=True)
                 db.rollback()
-                # Continue with the process even if database operations fail
+                # If database operations fail but repository was created,
+                # we should still raise an exception to indicate partial failure
+                error_msg = f"Repository created successfully but database operations failed: {str(e)}"
+                raise Exception(error_msg)
         else:
             logger.warning("Skipping database operations. No db provided.")
 

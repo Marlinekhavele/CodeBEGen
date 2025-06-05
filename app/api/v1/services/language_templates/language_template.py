@@ -84,7 +84,7 @@ class LanguageTemplate(ABC):
         pass
 
     @abstractmethod
-    async def run_migrations(self, project_dir: Path, entity_name: str):
+    async def run_migrations(self, project_dir: Path, entity_name: str = None):
         """
         Run the migration logic for this language.
         Should be implemented by each concrete template.
@@ -199,76 +199,72 @@ class LanguageTemplate(ABC):
 
 
 class LanguageTemplateFactory:
-    """
-    Factory for creating language-specific templates.
-    """
+    """Factory for creating language templates."""
 
-    _templates = {}
+    _template_registry = {}
 
     @classmethod
     def register_template(cls, language: str, template_class):
         """
-        Register a language template class.
+        Register a template class for a specific language.
 
         Args:
-            language (str): Language identifier
-            template_class: Template class to register
+            language: The language identifier (e.g., 'python', 'javascript')
+            template_class: The template class to register
         """
-        cls._templates[language.lower()] = template_class
+        cls._template_registry[language.lower()] = template_class
+        logger.info(f"Registered template for language: {language}")
 
     @classmethod
-    def get_template(cls, language: str) -> LanguageTemplate:
+    def create_template(cls, language: str, **kwargs):
         """
-        Get the appropriate template for the specified language.
+        Create a language template for the specified language.
 
         Args:
-            language (str): The programming language identifier
+            language: The programming language to create a template for
+            **kwargs: Additional parameters for template instantiation
 
         Returns:
-            LanguageTemplate: Instantiated language template
+            LanguageTemplate: An instance of a language-specific template
         """
-        # Import templates here to avoid circular imports
-        from app.api.v1.services.language_templates.javascript_template import (
-            JavaScriptTemplate,
-        )
-        from app.api.v1.services.language_templates.python_template import (
-            PythonTemplate,
-        )
-
-        # Register templates if not already done
-        if not cls._templates:
-            cls.register_template("python", PythonTemplate)
-            cls.register_template("javascript", JavaScriptTemplate)
-            cls.register_template("js", JavaScriptTemplate)
-
-            # Load prompt templates to ensure they're available
-            from app.api.v1.utils.prompt_manager import PromptManager
-
-            PromptManager.load_templates()
-
-            logger.info(f"Registered language templates: {list(cls._templates.keys())}")
-
         language = language.lower()
 
-        # Get the template class and instantiate it
-        template_class = cls._templates.get(language)
-        if template_class:
-            return template_class()
+        # First check the registry
+        if language in cls._template_registry:
+            return cls._template_registry[language](**kwargs)
 
-        # Fall back to Python if language not supported
-        logger.warning(f"Unsupported language: {language}. Falling back to Python.")
-        return PythonTemplate()
+        # Fallback to hardcoded templates
+        if language == "python":
+            from app.api.v1.services.language_templates.python_template import (
+                PythonTemplate,
+            )
+
+            return PythonTemplate(**kwargs)
+        elif language in ["javascript", "js"]:
+            from app.api.v1.services.language_templates.javascript_template import (
+                JavaScriptTemplate,
+            )
+
+            return JavaScriptTemplate(**kwargs)
+        else:
+            raise ValueError(f"Unsupported language: {language}")
 
     @classmethod
-    def get_supported_languages(cls) -> List[str]:
+    def get_template(cls, language: str, **kwargs):
         """
-        Get list of supported languages.
+        Retrieve a registered template instance for a specific language.
+
+        Args:
+            language: The language identifier (e.g., 'python', 'javascript')
+            **kwargs: Additional parameters for template instantiation
 
         Returns:
-            List[str]: List of supported language identifiers
-        """
-        # Ensure templates are registered
-        if not cls._templates:
-            cls.get_template("python")  # This will trigger registration
+            LanguageTemplate: An instance of the registered template class for the language.
 
-        return list(cls._templates.keys())
+        Raises:
+            ValueError: If no template is registered for the language.
+        """
+        language = language.lower()
+        if language in cls._template_registry:
+            return cls._template_registry[language](**kwargs)
+        raise ValueError(f"No template registered for language: {language}")

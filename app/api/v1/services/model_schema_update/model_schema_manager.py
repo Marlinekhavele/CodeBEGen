@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from app.api.v1.services.langchain_service import LangchainService
 from app.api.v1.services.language_templates import LanguageTemplateFactory
+from app.api.v1.services.language_templates.python_template import PythonTemplate
 from app.api.v1.services.model_schema_update.model_schema_base import (
     ModelSchemaManagerFactory,
 )
@@ -55,13 +56,15 @@ class ModelSchemaManager:
 
             # Read the current model content
             with open(model_path, "r") as f:
-                existing_model_code = f.read()
-
-            # Use LLM to identify needed field changes
+                existing_model_code = (
+                    f.read()
+                )  # Use LLM to identify needed field changes
             field_changes = await ModelSchemaManager.analyze_required_changes(
                 prompt_description,
+                entity_name,
                 existing_model_code,
                 endpoint_code,
+                language,
             )
 
             # Get model updater for this language
@@ -73,7 +76,9 @@ class ModelSchemaManager:
             )
 
             # Update the model file
-            ModelSchemaManager._update_model_file(model_path, updated_content)
+            ModelSchemaManager._update_model_file(
+                model_path, updated_content, project_id
+            )
 
             # Initialize result to track file changes
             files_to_commit = []
@@ -97,69 +102,25 @@ class ModelSchemaManager:
 
                 # Generate migration if requested and changes were made
                 if generate_migration and language.lower() == "python":
-                    # Instead of directly running migrations, we'll just create database tables
-                    # using our simplified approach
                     try:
-                        # Execute the run_migrations method which will properly handle table creation
-                        # without using Alembic commands
-                        migration_result = await language_template.run_migrations(
+                        # Use the new Alembic autogenerate-based migration logic
+                        migration_result = await language_template.generate_migration(
                             project_dir=Path(f"repos/{project_id}"),
                             entity_name=entity_name,
                         )
-
-                        # Add the database file to commit if migration was successful
-                        if migration_result.get(
-                            "success", False
-                        ) and migration_result.get("database_path"):
-                            db_path = migration_result["database_path"]
-                            # Read the database file as binary
-                            with open(db_path, "rb") as f:
-                                db_content = f.read()
-
-                            # Add to result for reference
-                            result["migration"] = {
-                                "file_path": str(
-                                    Path(db_path).relative_to(
-                                        Path(f"repos/{project_id}")
-                                    )
-                                ),
-                                "is_binary": True,
-                                "success": True,
-                                "message": migration_result.get(
-                                    "message", "Migration successful"
-                                ),
-                            }
-
-                            # Add database file to files to commit
-                            files_to_commit.append(
-                                {
-                                    "file_path": str(
-                                        Path(db_path).relative_to(
-                                            Path(f"repos/{project_id}")
-                                        )
-                                    ),
-                                    "commit_message": f"feat: Update database schema for {entity_name}",
-                                    "content": db_content,
-                                    "is_binary": True,
-                                }
-                            )
-
-                            # Also add any tables that were created
-                            if "tables_created" in migration_result:
-                                result["tables_created"] = migration_result[
-                                    "tables_created"
-                                ]
-
-                        result["migration_status"] = (
-                            "success"
-                            if migration_result.get("success", False)
-                            else "failed"
-                        )
-                        if not migration_result.get("success", False):
-                            result["migration_error"] = migration_result.get(
-                                "message", "Unknown error"
-                            )
-
+                        # Add migration file(s) to files_to_commit if present
+                        if migration_result and "migration_files" in migration_result:
+                            for file_info in migration_result["migration_files"]:
+                                files_to_commit.append(file_info)
+                        # Add migration component to result if present
+                        if (
+                            migration_result
+                            and "migration_component" in migration_result
+                        ):
+                            result["migration"] = migration_result[
+                                "migration_component"
+                            ]
+                        result["migration_status"] = "success"
                     except Exception as e:
                         logger.error(f"Error generating migration: {str(e)}")
                         result["migration_status"] = "failed"
@@ -211,14 +172,23 @@ class ModelSchemaManager:
             }
 
     @staticmethod
-    def _update_model_file(model_path: Path, updated_content: str) -> None:
+    def _update_model_file(
+        model_path: Path, updated_content: str, project_id: str = None
+    ) -> None:
         """
-        Update a model file with new content.
+        Update a model file with new content. Ensures the file is written inside repos/{project_id}/.
 
         Args:
-            model_path (Path): Path to the model file
+            model_path (Path): Path to the model file (can be relative)
             updated_content (str): New content to write to the file
+            project_id (str, optional): Project ID for absolute path resolution
         """
+        # Ensure model_path is absolute and inside repos/{project_id}/
+        if project_id and not str(model_path).replace("\\", "/").startswith(
+            f"repos/{project_id}/"
+        ):
+            model_path = Path(f"repos/{project_id}") / model_path
+        model_path.parent.mkdir(parents=True, exist_ok=True)
         with open(model_path, "w") as f:
             f.write(updated_content)
 
@@ -357,14 +327,13 @@ class ModelSchemaManager:
         if not schema_path.exists():
             schema_file_path = f"schemas/{schema_file}"
 
-        return schema_file_path
+        return schema_file_path @ staticmethod
 
-    @staticmethod
     async def _generate_migration(
         project_id: str, entity_name: str, language: str, model_code: str
     ) -> Optional[Dict[str, Any]]:
         """
-        Generate a migration for model changes.
+        Generate a migration for model changes using Alembic autogenerate.
 
         Args:
             project_id (str): Project identifier.
@@ -376,13 +345,33 @@ class ModelSchemaManager:
             Optional[Dict[str, Any]]: Migration result or None.
         """
         try:
-            # Generate migration using LangchainService
-            return await LangchainService.generate_migration(
-                project_id=project_id,
-                entity_name=entity_name,
-                language=language,
-                model_code=model_code,
-            )
+            # Use PythonTemplate.generate_migration for proper Alembic autogenerate
+            if language.lower() == "python":
+                project_dir = f"repos/{project_id}"
+                python_template = PythonTemplate()
+                migration_result = await python_template.generate_migration(
+                    project_dir=project_dir, entity_name=entity_name
+                )
+
+                # Return migration result in expected format
+                if migration_result.get("migration_status") == "success":
+                    return migration_result
+                else:
+                    logger.error(
+                        f"Migration generation failed: {migration_result.get('error', 'Unknown error')}"
+                    )
+                    return None
+            else:
+                # For non-Python languages, fall back to LLM generation
+                logger.warning(
+                    f"Using LLM migration generation for language: {language}"
+                )
+                return await LangchainService.generate_migration(
+                    project_id=project_id,
+                    entity_name=entity_name,
+                    language=language,
+                    model_code=model_code,
+                )
         except Exception as e:
             logger.error(f"Error generating migration: {str(e)}", exc_info=True)
             return None
@@ -501,6 +490,14 @@ class ModelSchemaManager:
 
                 # Only write back if changes were made
                 if updated:
+                    # Ensure schema_path is absolute and inside repos/{project_id}/
+                    if (
+                        not str(schema_path)
+                        .replace("\\", "/")
+                        .startswith(f"repos/{project_id}/")
+                    ):
+                        schema_path = Path(f"repos/{project_id}") / schema_path
+                    schema_path.parent.mkdir(parents=True, exist_ok=True)
                     with open(schema_path, "w") as f:
                         f.write(updated_content)
 

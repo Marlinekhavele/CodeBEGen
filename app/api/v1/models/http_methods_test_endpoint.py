@@ -74,3 +74,28 @@ class TestResponsePayload(BaseModel):
     cookies: Optional[Dict[str, str]] = None
     redirects: Optional[List[str]] = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+class CodeFixPayload(BaseModel):
+    """Payload model for code fixing requests"""
+
+    context: Optional[str] = Field(
+        None, description="Additional context about the error"
+    )
+    error_message: str = Field(..., description="The error message to fix")
+    file_path: str = Field(..., description="Path to the file that needs fixing")
+    language: str = Field(
+        default="python", description="Programming language of the file"
+    )
+    project_id: str = Field(..., description="ID of the project containing the file")
+
+
+class CodeFixResponse(BaseModel):
+    """Response model for code fixing requests"""
+
+    success: bool
+    message: str
+    fixed_code: Optional[str] = None
+    file_path: Optional[str] = None
+    changes_applied: bool = False
+    error_details: Optional[str] = None

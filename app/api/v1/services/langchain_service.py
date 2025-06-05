@@ -1,10 +1,7 @@
 import base64
-import datetime
 import hashlib
 import logging
-import os
 import re
-import uuid
 from typing import Any, Callable, Dict, List, Optional
 
 from langchain.prompts import PromptTemplate
@@ -14,6 +11,9 @@ from langchain_core.callbacks.streaming_stdout import StreamingStdOutCallbackHan
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 
+from app.api.v1.services.project_structure_context_service import (
+    ProjectStructureContextService,
+)
 from app.api.v1.utils.prompt_manager import PromptManager
 from config import settings
 
@@ -196,15 +196,44 @@ class LangchainService:
         return extensions.get(language.lower(), ".txt")
 
     @staticmethod
+    def enhance_prompt_with_project_context(
+        prompt: str, project_id: Optional[str]
+    ) -> str:
+        """
+        Enhance a prompt with project structure context if available.
+
+        Args:
+            prompt (str): The original prompt text
+            project_id (Optional[str]): The project identifier
+
+        Returns:
+            str: Enhanced prompt with project structure context
+        """
+        if not project_id:
+            return prompt
+
+        try:
+            return ProjectStructureContextService.enhance_prompt_with_structure(
+                prompt, project_id
+            )
+        except Exception as e:
+            logger.error(f"Failed to enhance prompt with project structure: {e}")
+            return prompt
+
+    @staticmethod
     async def generate_code_with_template(
-        template_name: str, language: str, **template_vars
+        template_name: str,
+        language: str,
+        project_id: Optional[str] = None,
+        **template_vars,
     ) -> Dict[str, Any]:
         """
-        Generate code using a template from PromptManager.
+        Generate code using a template from PromptManager, enhanced with project context.
 
         Args:
             template_name (str): The name of the template to use
             language (str): Programming language to generate code for
+            project_id (Optional[str]): The project identifier
             **template_vars: Variables to pass to the template
 
         Returns:
@@ -214,16 +243,27 @@ class LangchainService:
             Exception: If code generation fails
         """
         try:
-            # Format the template using PromptManager
+            # Format the template using PromptManager, including project_id
+            template_vars_with_project_id = {**template_vars}
+            if project_id:
+                template_vars_with_project_id["project_id"] = project_id
+
             formatted_prompt = PromptManager.format_template(
-                template_name=template_name, language=language, **template_vars
+                template_name=template_name,
+                language=language,
+                **template_vars_with_project_id,
+            )
+
+            # Enhance the prompt with project structure context
+            enhanced_prompt = LangchainService.enhance_prompt_with_project_context(
+                formatted_prompt, project_id
             )
 
             # Create a chain
             chain = LangchainService.create_chain_from_template("")
 
-            # Execute the chain with our formatted prompt
-            result = await chain.ainvoke({"input": formatted_prompt})
+            # Execute the chain with our enhanced prompt
+            result = await chain.ainvoke({"input": enhanced_prompt})
 
             # Clean the result
             cleaned_code = LangchainService.clean_code(result)
@@ -243,20 +283,20 @@ class LangchainService:
             )
 
     @staticmethod
-    async def generate_custom_code(
-        project_id: str,
-        prompt: str,
-        language: str = "python",
-        context: Optional[str] = None,
+    def generate_code_with_template_sync(
+        template_name: str,
+        language: str,
+        project_id: Optional[str] = None,
+        **template_vars,
     ) -> Dict[str, Any]:
         """
-        Generate custom code using a specific prompt.
+        Generate code using a template from PromptManager, enhanced with project context - synchronous version.
 
         Args:
-            project_id (str): The project ID
-            prompt (str): Custom generation prompt
-            language (str): Programming language
-            context (Optional[str]): Additional context code
+            template_name (str): The name of the template to use
+            language (str): Programming language to generate code for
+            project_id (Optional[str]): The project identifier
+            **template_vars: Variables to pass to the template
 
         Returns:
             Dict[str, Any]: Dictionary with generated code and metadata
@@ -265,24 +305,28 @@ class LangchainService:
             Exception: If code generation fails
         """
         try:
-            # Add language-specific context
-            language_context = LangchainService._get_language_context(language)
 
-            # Build the final prompt with all context
-            final_prompt = f"""
-            {language_context}
+            # Format the template using PromptManager, including project_id
+            template_vars_with_project_id = {**template_vars}
+            if project_id:
+                template_vars_with_project_id["project_id"] = project_id
 
-            {prompt}
-            """
+            formatted_prompt = PromptManager.format_template(
+                template_name=template_name,
+                language=language,
+                **template_vars_with_project_id,
+            )
 
-            if context:
-                final_prompt += f"\n\nReference code:\n{context}"
+            # Enhance the prompt with project structure context
+            enhanced_prompt = LangchainService.enhance_prompt_with_project_context(
+                formatted_prompt, project_id
+            )
 
             # Create a chain
             chain = LangchainService.create_chain_from_template("")
 
-            # Execute the chain with our formatted prompt
-            result = await chain.ainvoke({"input": final_prompt})
+            # Execute the chain with our enhanced prompt - synchronously
+            result = chain.invoke({"input": enhanced_prompt})
 
             # Clean the result
             cleaned_code = LangchainService.clean_code(result)
@@ -294,377 +338,84 @@ class LangchainService:
                 "file_hash": LangchainService.generate_file_hash(cleaned_code),
             }
         except Exception as e:
-            logger.error(f"Error in custom code generation: {e}", exc_info=True)
-            raise Exception(f"Failed to generate custom code: {str(e)}")
-
-    @staticmethod
-    def _get_language_context(language: str) -> str:
-        """
-        Get language-specific context for the LLM.
-
-        Args:
-            language (str): Programming language
-
-        Returns:
-            str: Context string specific to the language
-        """
-        language = language.lower()
-
-        if language == "python":
-            return """
-            You are generating Python code for a FastAPI application.
-            Follow these conventions:
-            - Use async/await for database operations
-            - Use SQLAlchemy for ORM
-            - Use Pydantic for data validation
-            - Organize code into models, schemas, and endpoints
-            - Follow PEP 8 style guidelines
-            """
-        elif language in ["javascript", "js"]:
-            return """
-            You are generating JavaScript code for an Express.js application.
-            Follow these conventions:
-            - Use ES6+ syntax with const/let
-            - Use async/await for asynchronous operations
-            - Use Mongoose for MongoDB models
-            - Organize code into models, controllers, and routes
-            - Use proper error handling with try/catch
-            - Export modules using module.exports or export default
-            """
-        elif language == "typescript":
-            return """
-            You are generating TypeScript code for an Express.js application.
-            Follow these conventions:
-            - Use proper TypeScript types and interfaces
-            - Use ES6+ syntax with const/let
-            - Use async/await for asynchronous operations
-            - Use Mongoose with type definitions
-            - Organize code into models, controllers, and routes
-            - Use proper error handling with try/catch
-            - Export modules using export or export default
-            """
-        else:
-            return f"You are generating {language} code. Follow best practices and conventions for {language}."
-
-    @staticmethod
-    def _find_existing_model(
-        entity_name: str, models_list: List[Dict[str, Any]]
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Find an existing model in the project that matches the entity name.
-
-        Args:
-            entity_name (str): The entity name to search for
-            models_list (List[Dict[str, Any]]): List of models from project analysis
-
-        Returns:
-            Optional[Dict[str, Any]]: Matching model or None if not found
-        """
-        # Normalize entity name for comparison
-        entity_name_lower = entity_name.lower()
-
-        for model in models_list:
-            model_name = model.get("name", "").lower()
-
-            # Check for exact match
-            if model_name == entity_name_lower:
-                return model
-
-            # Check for singular/plural variations
-            if model_name.endswith("s") and model_name[:-1] == entity_name_lower:
-                return model
-
-            if entity_name_lower.endswith("s") and entity_name_lower[:-1] == model_name:
-                return model
-
-        return None
-
-    # The following methods are maintained for backward compatibility
-    # They use the language template system internally but keep the same interface
-
-    @staticmethod
-    async def generate_endpoint(
-        project_id: str,
-        endpoint_description: str,
-        method: str,
-        endpoint_path: str,
-        language: str = "python",
-        additional_context: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """
-        Generate endpoint code using Langchain with language support.
-
-        Args:
-            project_id (str): Identifier for the project
-            endpoint_description (str): Description of the endpoint functionality
-            method (str): HTTP method for the endpoint (GET, POST, etc.)
-            endpoint_path (str): URL path for the endpoint
-            language (str): Programming language to generate code for
-            additional_context (Optional[str]): Any supplementary information
-
-        Returns:
-            Dict[str, Any]: Dictionary with generated endpoint code and metadata
-
-        Raises:
-            Exception: If endpoint generation fails
-        """
-        try:
-            # Use our new template-based generation
-            result = await LangchainService.generate_code_with_template(
-                template_name="endpoint",
-                endpoint_description=endpoint_description,
-                method=method,
-                method_lower=method.lower(),
-                endpoint_path=endpoint_path,
-                additional_context=additional_context or "",
-                language=language,
-            )
-
-            # Add backward compatibility fields
-            path_segments = endpoint_path.strip("/").split("/")
-            last_segment = path_segments[-1]
-            file_extension = LangchainService.get_file_extension(language)
-            file_path = f"endpoints/{last_segment}.{method.lower()}{file_extension}"
-
-            result["method"] = method
-            result["endpoint_path"] = endpoint_path
-            result["file_path"] = file_path
-
-            return result
-
-        except Exception as e:
             logger.error(
-                f"Error generating endpoint with Langchain: {str(e)}", exc_info=True
-            )
-            raise Exception(f"Failed to generate endpoint with Langchain: {str(e)}")
-
-    @staticmethod
-    async def generate_model(
-        project_id: str,
-        entity_name: str,
-        entity_description: str,
-        language: str = "python",
-        endpoint_code: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """
-        Generate model code using Langchain with language support.
-
-        Args:
-            project_id (str): Identifier for the project
-            entity_name (str): Name of the entity to model
-            entity_description (str): Description of the entity
-            language (str): Programming language to generate code for
-            endpoint_code (Optional[str]): Optional endpoint code for context
-
-        Returns:
-            Dict[str, Any]: Dictionary with generated model code and metadata
-
-        Raises:
-            Exception: If model generation fails
-        """
-        try:
-            # Use our new template-based generation
-            result = await LangchainService.generate_code_with_template(
-                template_name="model",
-                language=language,
-                entity_name=entity_name,
-                entity_description=entity_description,
-                endpoint_code=endpoint_code
-                or "# Endpoint code not provided for context",
-            )
-
-            # Add backward compatibility fields
-            file_extension = LangchainService.get_file_extension(language)
-            file_path = f"models/{entity_name.lower()}{file_extension}"
-
-            result["entity_name"] = entity_name
-            result["file_path"] = file_path
-
-            return result
-
-        except Exception as e:
-            logger.error(
-                f"Error generating model with Langchain: {str(e)}", exc_info=True
-            )
-            raise Exception(f"Failed to generate model with Langchain: {str(e)}")
-
-    @staticmethod
-    async def generate_schema(
-        project_id: str,
-        entity_name: str,
-        language: str = "python",
-        endpoint_code: Optional[str] = None,
-        model_code: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """
-        Generate schema code using Langchain with language support.
-
-        Args:
-            project_id (str): Identifier for the project
-            entity_name (str): Name of the entity to create schemas for
-            language (str): Programming language to generate code for
-            endpoint_code (Optional[str]): Optional endpoint code for context
-            model_code (Optional[str]): Optional model code for context
-
-        Returns:
-            Dict[str, Any]: Dictionary with generated schema code and metadata
-
-        Raises:
-            Exception: If schema generation fails
-        """
-        try:
-            # Use our new template-based generation
-            result = await LangchainService.generate_code_with_template(
-                template_name="schema",
-                language=language,
-                entity_name=entity_name,
-                endpoint_code=endpoint_code or "# Endpoint code not provided",
-                model_code=model_code or "# Model code not provided",
-            )
-
-            # Add backward compatibility fields
-            file_extension = LangchainService.get_file_extension(language)
-            file_path = f"schemas/{entity_name.lower()}{file_extension}"
-
-            result["entity_name"] = entity_name
-            result["file_path"] = file_path
-
-            return result
-
-        except Exception as e:
-            logger.error(
-                f"Error generating schema with Langchain: {str(e)}", exc_info=True
-            )
-            raise Exception(f"Failed to generate schema with Langchain: {str(e)}")
-
-    @staticmethod
-    async def generate_migration(
-        project_id: str,
-        entity_name: str,
-        language: str = "python",
-        model_code: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """
-        Generate migration code using Langchain with language support.
-
-        Args:
-            project_id (str): Identifier for the project
-            entity_name (str): Name of the entity to create migrations for
-            language (str): Programming language to generate code for
-            model_code (Optional[str]): Optional model code for context
-
-        Returns:
-            Dict[str, Any]: Dictionary with generated migration code and metadata
-
-        Raises:
-            Exception: If migration generation fails
-        """
-        try:
-            # Determine the project path based on the project_id
-            project_path = f"repos/{project_id}"
-            alembic_dir = os.path.join(project_path, "alembic")
-
-            # Determine the latest migration ID
-            try:
-                from app.api.v1.utils.migration_finder import get_latest_migration_id
-
-                latest_migration_id = get_latest_migration_id(alembic_dir=alembic_dir)
-            except Exception as e:
-                logger.warning(
-                    f"Could not determine latest migration ID: {str(e)}. Using 'base' as default."
-                )
-                latest_migration_id = "base"
-
-            logger.info(f"Using latest migration ID as parent: {latest_migration_id}")
-
-            # Use our new template-based generation
-            result = await LangchainService.generate_code_with_template(
-                template_name="migration",
-                language=language,
-                entity_name=entity_name,
-                latest_migration_id=latest_migration_id,
-                model_code=model_code or "# Model code not provided",
-            )
-
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            revision_id = uuid.uuid4().hex[:8]
-
-            # Use the appropriate file extension
-            file_extension = LangchainService.get_file_extension(language)
-            filename = f"{timestamp}_{revision_id}_create_{entity_name.lower()}{file_extension}"
-
-            # File path: alembic/versions/timestamp_revision_create_entity.[extension]
-            file_path = f"alembic/versions/{filename}"
-
-            result["entity_name"] = entity_name
-            result["file_path"] = file_path
-            result["parent_migration_id"] = latest_migration_id
-
-            return result
-
-        except Exception as e:
-            logger.error(
-                f"Error generating migration with Langchain: {str(e)}", exc_info=True
-            )
-            raise Exception(f"Failed to generate migration with Langchain: {str(e)}")
-
-    @staticmethod
-    async def generate_helpers(
-        project_id: str,
-        entity_name: str,
-        entity_description: str,
-        language: str = "python",
-        endpoint_code: Optional[str] = None,
-        model_code: Optional[str] = None,
-        schema_code: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """
-        Generate helper functions using Langchain with language support.
-
-        Args:
-            project_id (str): Identifier for the project
-            entity_name (str): Name of the entity to create helpers for
-            entity_description (str): Description of the entity
-            language (str): Programming language to generate code for
-            endpoint_code (Optional[str]): Optional endpoint code for context
-            model_code (Optional[str]): Optional model code for context
-            schema_code (Optional[str]): Optional schema code for context
-
-        Returns:
-            Dict[str, Any]: Dictionary with generated helper code and metadata
-
-        Raises:
-            Exception: If helper function generation fails
-        """
-        try:
-            # Use our new template-based generation
-            result = await LangchainService.generate_code_with_template(
-                template_name="helpers",
-                language=language,
-                entity_name=entity_name,
-                entity_description=entity_description,
-                endpoint_code=endpoint_code or "# Endpoint code not provided",
-                model_code=model_code or "# Model code not provided",
-                schema_code=schema_code or "# Schema code not provided",
-            )
-
-            # Add backward compatibility fields
-            file_extension = LangchainService.get_file_extension(language)
-            file_path = f"helpers/{entity_name.lower()}_helpers{file_extension}"
-
-            result["entity_name"] = entity_name
-            result["file_path"] = file_path
-
-            return result
-
-        except Exception as e:
-            logger.error(
-                f"Error generating helper functions with Langchain: {str(e)}",
-                exc_info=True,
+                f"Error in template-based code generation: {str(e)}", exc_info=True
             )
             raise Exception(
-                f"Failed to generate helper functions with Langchain: {str(e)}"
+                f"Failed to generate code with template {template_name}: {str(e)}"
+            ) @ staticmethod
+
+    def generate_helpers_sync(
+        project_id: Optional[str] = None,
+        entity_name: str = "",
+        entity_description: Optional[str] = None,
+        endpoint_code: str = "",
+        model_code: str = "",
+        schema_code: str = "",
+        only_functions: Optional[List[str]] = None,
+        language: str = "python",
+    ) -> Dict[str, Any]:
+        """
+        Generate helper functions synchronously based on entity and endpoint requirements.
+        Args:
+            project_id: Optional project identifier for context
+            entity_name: The name of the entity being created
+            entity_description: Optional description of the entity
+            endpoint_code: The endpoint code that references helper functions
+            model_code: The model code for context
+            schema_code: The schema code for context
+            only_functions: Optional list of specific functions to generate
+            language: The programming language to generate helpers in
+        Returns:
+            Dict with generated helper code and metadata
+        """
+        try:
+            # Always use the correct template name for helpers
+            template_name = "helpers"
+
+            # Format template variables
+            template_vars = {
+                "entity_name": entity_name,
+                "entity_description": entity_description or f"{entity_name} entity",
+                "endpoint_code": endpoint_code,
+                "model_code": model_code,
+                "schema_code": schema_code,
+            }
+            # Add specific functions if provided
+            if only_functions:
+                template_vars["only_functions"] = ", ".join(only_functions)
+                logger.info(
+                    f"Generating only specific helper functions: {only_functions}"
+                )
+
+            # Generate the code
+            result = LangchainService.generate_code_with_template_sync(
+                template_name=template_name,
+                language=language,
+                project_id=project_id,
+                **template_vars,
             )
+            # Clean and extract code
+            generated_code = result.get("generated_code", "")
+            # Return all required fields for downstream code/tests
+            return {
+                "generated_code": generated_code,
+                "content_base64": result.get("content_base64", ""),
+                "file_hash": result.get("file_hash", ""),
+                "language": result.get("language", language),
+                "file_path": result.get(
+                    "file_path", f"helpers/{entity_name.lower()}_helpers.py"
+                ),
+                "only_functions": only_functions,
+                "success": True,
+            }
+        except Exception as e:
+            logger.error(f"Error generating helpers: {str(e)}", exc_info=True)
+            return {
+                "generated_code": f"# Error generating helpers: {str(e)}",
+                "success": False,
+                "error": str(e),
+            }
 
     @staticmethod
     def needs_model_and_schema(code: str) -> bool:
@@ -712,3 +463,246 @@ class LangchainService:
                 if re.search(pattern, code, re.IGNORECASE):
                     return True
             return False
+
+    @staticmethod
+    async def fix_code_error(
+        project_id: str,
+        error_message: str,
+        generated_code: str,
+        language: str = "python",
+        file_path: Optional[str] = None,
+        context: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Fix code errors using LLM, especially configuration and compatibility issues.
+
+        Args:
+            project_id: The project identifier
+            error_message: The error message from testing/execution
+            generated_code: The code that has the error
+            language: Programming language (python, javascript, etc.)
+            file_path: Path to the file with error (optional)
+            context: Additional context about the error (optional)
+
+        Returns:
+            Dict containing the fixed code and metadata
+        """
+        try:
+            # Create error-specific prompt based on error type
+            error_type = LangchainService._classify_error_type(error_message)
+
+            if error_type == "pydantic_config":
+                # Special handling for Pydantic configuration errors
+                prompt_template = """
+You are an expert Python developer fixing Pydantic configuration errors.
+
+ERROR MESSAGE: {error_message}
+
+CURRENT CODE:
+```python
+{generated_code}
+```
+
+TASK: Fix the Pydantic configuration error. Common fixes:
+1. For "You must set the config attribute `from_attributes=True` to use from_orm":
+   - Replace `orm_mode = True` with `from_attributes = True` in Config class
+   - Update to Pydantic v2 syntax
+
+2. For other Pydantic v2 migration issues:
+   - Update Config class syntax
+   - Fix field definitions
+   - Update validators
+
+OUTPUT: Provide ONLY the fixed Python code without explanations or markdown formatting.
+"""
+            elif error_type == "parameter_mismatch":
+                # Handle function parameter mismatches
+                prompt_template = """
+You are an expert Python developer fixing function parameter mismatch errors.
+
+ERROR MESSAGE: {error_message}
+
+CURRENT CODE:
+```python
+{generated_code}
+```
+
+TASK: Fix the parameter mismatch error by:
+1. Analyzing function calls and definitions
+2. Ensuring parameter names match between caller and callee
+3. Fixing any parameter name inconsistencies
+
+OUTPUT: Provide ONLY the fixed Python code without explanations or markdown formatting.
+"""
+            elif error_type == "import_error":
+                # Handle import errors
+                prompt_template = """
+You are an expert Python developer fixing import errors.
+
+ERROR MESSAGE: {error_message}
+
+CURRENT CODE:
+```python
+{generated_code}
+```
+
+FILE PATH: {file_path}
+PROJECT CONTEXT: {context}
+
+TASK: Fix the import error by:
+1. Correcting import statements
+2. Ensuring proper module paths
+3. Adding missing imports
+4. Removing unused imports
+
+OUTPUT: Provide ONLY the fixed Python code without explanations or markdown formatting.
+"""
+            else:
+                # Generic error fixing
+                prompt_template = """
+You are an expert {language} developer fixing code errors.
+
+ERROR MESSAGE: {error_message}
+
+CURRENT CODE:
+```{language}
+{generated_code}
+```
+
+FILE PATH: {file_path}
+ADDITIONAL CONTEXT: {context}
+
+TASK: Analyze the error message and fix the code to resolve the issue. Common fixes include:
+1. Syntax errors
+2. Configuration issues
+3. Import problems
+4. Function signature mismatches
+5. Type errors
+
+OUTPUT: Provide ONLY the fixed {language} code without explanations or markdown formatting.
+"""
+
+            # Create the prompt
+            prompt = PromptTemplate(
+                input_variables=[
+                    "error_message",
+                    "generated_code",
+                    "language",
+                    "file_path",
+                    "context",
+                ],
+                template=prompt_template,
+            )
+
+            # Get LLM
+            llm = LangchainService.get_llm()
+
+            # Create chain
+            chain = prompt | llm | StrOutputParser()
+
+            # Generate fixed code
+            result = await chain.ainvoke(
+                {
+                    "error_message": error_message,
+                    "generated_code": generated_code,
+                    "language": language,
+                    "file_path": file_path or "Unknown",
+                    "context": context or "No additional context",
+                }
+            )
+
+            # Clean up the result (remove any markdown formatting)
+            fixed_code = LangchainService._clean_generated_code(result, language)
+
+            return {
+                "generated_code": fixed_code,
+                "file_path": file_path,
+                "content_base64": LangchainService.encode_content(fixed_code),
+                "file_hash": LangchainService.generate_file_hash(fixed_code),
+                "error_type": error_type,
+                "fixed": True,
+            }
+
+        except Exception as e:
+            logger.error(f"Error fixing code: {str(e)}", exc_info=True)
+            raise Exception(f"Failed to fix code error: {str(e)}")
+
+    @staticmethod
+    def _classify_error_type(error_message: str) -> str:
+        """
+        Classify the type of error based on the error message.
+
+        Args:
+            error_message: The error message to classify
+
+        Returns:
+            str: The error type classification
+        """
+        error_lower = error_message.lower()
+
+        if "from_attributes" in error_lower and "use from_orm" in error_lower:
+            return "pydantic_config"
+        elif "got an unexpected keyword argument" in error_lower:
+            return "parameter_mismatch"
+        elif "no module named" in error_lower or "import" in error_lower:
+            return "import_error"
+        elif "syntax error" in error_lower:
+            return "syntax_error"
+        elif "type error" in error_lower:
+            return "type_error"
+        else:
+            return "generic"
+
+    @staticmethod
+    def _clean_generated_code(code: str, language: str) -> str:
+        """
+        Clean up generated code by removing markdown formatting and extra text.
+
+        Args:
+            code: The raw generated code
+            language: The programming language
+
+        Returns:
+            str: Cleaned code
+        """
+        # Remove markdown code blocks
+        code = re.sub(rf"```{language}\n?", "", code)
+        code = re.sub(r"```\n?", "", code)
+
+        # Remove any explanatory text before/after code
+        lines = code.split("\n")
+
+        # Find the first line that looks like code
+        start_idx = 0
+        for i, line in enumerate(lines):
+            if language == "python":
+                # Look for imports, class, def, or other Python statements
+                if (
+                    line.strip().startswith(
+                        ("import ", "from ", "class ", "def ", "@", "async def")
+                    )
+                    or line.strip()
+                    and not line.strip().startswith(("Here", "The", "This", "Fixed"))
+                ):
+                    start_idx = i
+                    break
+            else:
+                # For other languages, be more generic
+                if line.strip() and not line.strip().startswith(
+                    ("Here", "The", "This", "Fixed")
+                ):
+                    start_idx = i
+                    break
+
+        # Find the last line that looks like code
+        end_idx = len(lines) - 1
+        for i in range(len(lines) - 1, -1, -1):
+            if lines[i].strip() and not lines[i].strip().startswith(
+                ("The above", "This should")
+            ):
+                end_idx = i
+                break
+
+        # Extract the code section
+        cleaned_lines = lines[start_idx : end_idx + 1]
+        return "\n".join(cleaned_lines).strip()

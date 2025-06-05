@@ -362,7 +362,7 @@ IMPORTANT:
 4. ALWAYS include imports for ANY types, classes, or modules used in the model.
 5. For ID columns, use String type with UUID string as default: `Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))`.
 6. If using Enum types, define the enum class and import enum module but if its best to avoid enum please do.
-7. Always import the necesaccy dependencies if being used in the code
+7. Always import the necessary dependencies if being used in the code
 8. Use correct indentation when writing to avoid tests failing
 IMPORTANT :
 - Make foreign keys nullable=True to prevent constraint violations

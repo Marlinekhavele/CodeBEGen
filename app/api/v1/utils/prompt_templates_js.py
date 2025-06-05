@@ -56,6 +56,8 @@ module.exports = router;
    - Use these helper functions in your implementation instead of direct queries when appropriate
    - For database endpoints: use `getAllBooks(req, res)` instead of direct database queries
    - For non-database endpoints: use appropriate utility functions
+   - ⚠️ CRITICAL: Every helper function you call in your endpoint code MUST be imported
+   - ⚠️ Example: If you call `getBookById(book_id)`, you MUST import it: `const { getBookById } = require('../helpers/bookHelpers');`
 
 # CRITICAL NAMING INSTRUCTION:
 # The model names you import (e.g., `const Product = require('../models/product')`)
@@ -63,12 +65,23 @@ module.exports = router;
 # WILL DICTATE the exact names that *must* be implemented in subsequent generation steps.
 # Use clear, conventional names based on the inferred entity (e.g., `Product`, `getProduct`, `createProduct`).
 
+# IMPORT-USAGE CONSISTENCY RULE:
+# Before writing any code, identify ALL helper functions you plan to use, then ensure they are ALL imported.
+# Common helper function patterns for JavaScript:
+# - getAllItems() → const { getAllItems } = require('../helpers/itemHelpers');
+# - getItemById() → const { getItemById } = require('../helpers/itemHelpers');
+# - createItem() → const { createItem } = require('../helpers/itemHelpers');
+# - updateItem() → const { updateItem } = require('../helpers/itemHelpers');
+# - deleteItem() → const { deleteItem } = require('../helpers/itemHelpers');
+# EVERY function call in your endpoint MUST have a corresponding import statement.
+
 # CODE EXAMPLE
 ## Database-dependent endpoint:
 ```javascript
 const express = require('express');
 const router = express.Router();
 const Book = require('../models/book');
+// ⚠️ NOTICE: All helper functions used below are imported here
 const { getAllBooks, getBookById, createBook } = require('../helpers/bookHelpers');
 
 /**
@@ -93,13 +106,30 @@ router.get('/books', async (req, res) => {
 router.post('/books', async (req, res) => {
   try {
     // Pass request body to the helper function
-    const newBook = await createBook(req.body);
+    const newBook = await createBook(req.body); // createBook is imported above
     if (!newBook) {
       return res.status(400).json({ message: 'Book could not be created' });
     }
     return res.status(201).json(newBook);
   } catch (error) {
     console.error('Error creating book:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/**
+ * @route GET /books/:id
+ * @desc Get a specific book by ID
+ */
+router.get('/books/:id', async (req, res) => {
+  try {
+    const book = await getBookById(req.params.id); // getBookById is imported above
+    if (!book) {
+      return res.status(404).json({ message: 'Book not found' });
+    }
+    return res.status(200).json(book);
+  } catch (error) {
+    console.error('Error fetching book:', error);
     return res.status(500).json({ message: 'Server error' });
   }
 });
@@ -135,6 +165,15 @@ IMPORTANT:
 6. Always use async/await for asynchronous operations.
 7. Always provide appropriate JSDoc comments for each route.
 8. ONLY include database imports for endpoints that need database access based on the description.
+
+# FUNCTION-IMPORT CONSISTENCY CHECK:
+Before finalizing your code, verify that EVERY helper function call has a corresponding import.
+Examples of CORRECT import patterns:
+- If you call getAllBooks() → Must import: const { getAllBooks } = require('../helpers/bookHelpers');
+- If you call getBookById() → Must import: const { getBookById } = require('../helpers/bookHelpers');
+- If you call createBook() → Must import: const { createBook } = require('../helpers/bookHelpers');
+
+FINAL VERIFICATION: Review all function calls in your endpoint code and ensure corresponding imports exist above. This is the most common source of import errors.
 """
 
 # JavaScript Model Generation Template

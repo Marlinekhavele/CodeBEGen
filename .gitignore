@@ -184,3 +184,10 @@ jeff.py
 
 templates*
 static*
+
+# Project-specific folders
+quality_metrics/
+repos/
+
+# Test benchmark files
+test_benchmark*

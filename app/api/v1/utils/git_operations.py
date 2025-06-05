@@ -42,9 +42,31 @@ def run_git_command(command, cwd=None):
         env = os.environ.copy()
         env["GIT_SSL_NO_VERIFY"] = "true"
 
-        result = subprocess.run(
-            command, cwd=cwd, env=env, check=True, capture_output=True, text=True
-        )
+        # Special handling for commit commands to ensure proper escaping
+        if (
+            len(command) >= 3
+            and command[0] == "git"
+            and command[1] == "commit"
+            and command[2] == "-m"
+        ):
+            # Use a more robust approach for commit messages
+            commit_command = command[:3]  # ["git", "commit", "-m"]
+            commit_message = command[3] if len(command) > 3 else ""
+
+            # Ensure commit message is properly handled
+            result = subprocess.run(
+                commit_command + [commit_message],
+                cwd=cwd,
+                env=env,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        else:
+            result = subprocess.run(
+                command, cwd=cwd, env=env, check=True, capture_output=True, text=True
+            )
+
         output = result.stdout.strip()
         # Truncate long output for logging
         log_output = output[:500] + "..." if len(output) > 500 else output
@@ -52,9 +74,10 @@ def run_git_command(command, cwd=None):
         logger.debug(f"Git command output: {log_output}")
         return output
     except subprocess.CalledProcessError as e:
-        error_msg = e.stderr.strip()
+        error_msg = e.stderr.strip() if e.stderr else str(e)
         logger.error(f"Git command failed: {cmd_str}")
         logger.error(f"Error details: {error_msg}")
+        logger.error(f"Return code: {e.returncode}")
 
         # Special handling for common git errors
         if "nothing to commit" in error_msg:
@@ -266,7 +289,7 @@ def configure_git_for_project(project_dir):
     run_git_command(["git", "config", "credential.helper", "store"], cwd=project_dir)
 
     # Disable SSL verification
-    gitea_domain = "159.203.105.4"
+    gitea_domain = "localhost:3001"
     run_git_command(
         ["git", "config", f"http.{gitea_domain}.sslVerify", "false"], cwd=project_dir
     )

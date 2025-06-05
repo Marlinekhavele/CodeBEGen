@@ -36,6 +36,20 @@ target_metadata = Base.metadata
 # Edit alembic.ini to point to your SQLite database
 # sqlalchemy.url = sqlite:///./storage/db/db.sqlite
 
+# Import all models in the models directory so Alembic autogenerate sees all fields
+import importlib
+import os
+models_dir = Path(__file__).resolve().parent.parent / "models"
+if models_dir.exists():
+    for file in os.listdir(models_dir):
+        if file.endswith(".py") and not file.startswith("__"):
+            module_name = f"models.{file[:-3]}"
+            try:
+                importlib.import_module(module_name)
+            except Exception as e:
+                print(f"Warning: Could not import {module_name}: {e}")
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 

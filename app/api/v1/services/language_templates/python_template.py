@@ -1,9 +1,18 @@
 import asyncio
+import configparser
+import importlib
 import logging
+import os
 import re
+import shutil
+import sqlite3
+import subprocess
+import sys
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from alembic.config import Config
 from app.api.v1.services.git_service import GitService
 from app.api.v1.services.langchain_service import LangchainService
 from app.api.v1.services.language_templates.language_template import LanguageTemplate
@@ -14,14 +23,8 @@ logger = logging.getLogger(__name__)
 class PythonTemplate(LanguageTemplate):
     """Python-specific implementation of language template"""
 
-    def get_file_extension(self) -> str:
-        """
-        Get the standard file extension for Python files.
-
-        Returns:
-            str: File extension for Python ("py")
-        """
-        return "py"
+    # Enable Git commits for generated code files
+    git_enabled = True
 
     def get_component_map(self) -> Dict[str, Optional[str]]:
         """
@@ -38,6 +41,74 @@ class PythonTemplate(LanguageTemplate):
             "helpers": "helpers",
             "route": None,  # Python FastAPI combines routes and endpoints
         }
+
+    def extract_entity_from_prompt(self, prompt: str) -> str:
+        """
+        Improved extraction of entity name(s) from a natural language prompt for Python code generation.
+        Handles lowercase, multi-word entities, and more flexible prompt structures.
+        Uses spaCy for noun phrase extraction if available, otherwise falls back to regex.
+
+        Args:
+            prompt (str): The natural language prompt
+
+        Returns:
+            str: The extracted entity name, or an empty string if not found"""
+        try:
+            import spacy
+
+            nlp = spacy.load("en_core_web_sm")
+            doc = nlp(prompt)
+            # Extract the longest noun chunk (noun phrase)
+            noun_chunks = list(doc.noun_chunks)
+            if noun_chunks:
+                # Return the longest noun chunk (most likely the entity)
+                entity = max(noun_chunks, key=lambda nc: len(nc.text)).text.strip()
+                # Remove trailing punctuation
+                entity = re.sub(r"[.?!,;:]$", "", entity)
+                return entity
+        except Exception:
+            pass  # spaCy not installed or model not available, fallback to regex
+
+        # Lowercase prompt for matching, but keep original for extraction
+        prompt_lc = prompt.lower()
+        original = prompt
+
+        # Try to extract after common verbs (manage, create, add, delete, update, etc.)
+        verb_pattern = r"(?:manage|create|add|delete|update|edit|remove|list|get|set|find|generate|build|make|fetch|retrieve|handle|process|modify|view|show|display|read|write|save|store|archive|export|import|sync|synchronize|search|filter|sort|assign|unassign|link|unlink|associate|dissociate|connect|disconnect|enable|disable|activate|deactivate|approve|reject|submit|cancel|complete|start|stop|pause|resume|schedule|unschedule|book|unbook|order|purchase|sell|buy|ship|deliver|return|refund|pay|charge|bill|invoice|quote|estimate|track|monitor|log|audit|report|notify|alert|remind|invite|register|sign up|sign in|login|logout|authenticate|authorize|verify|validate|confirm|decline|block|unblock|ban|unban|mute|unmute|follow|unfollow|like|unlike|comment|reply|share|post|publish|unpublish|draft|undraft|pin|unpin|favorite|unfavorite|star|unstar|rate|review|score|vote|upvote|downvote|recommend|suggest|request|offer|accept|decline|join|leave|enter|exit|open|close|lock|unlock)\s+(?:an?\s+|the\s+|all\s+|multiple\s+|many\s+|a list of\s+|)"  # verb + optional article/quantifier
+        # Try to match multi-word entities (e.g., 'orders of product', 'user profile', 'order item')
+        entity_pattern = verb_pattern + r"([a-zA-Z0-9_\- ]+(?: of [a-zA-Z0-9_\- ]+)*)"
+        match = re.search(entity_pattern, prompt_lc)
+        if match:
+            # Extract the matched entity phrase from the original prompt (preserve casing)
+            start = match.start(1)
+            end = match.end(1)
+            entity = original[start:end].strip()
+            # Remove trailing punctuation
+            entity = re.sub(r"[.?!,;:]$", "", entity)
+            return entity
+
+        # Fallback: look for the last noun-like word or phrase (e.g., after 'of')
+        fallback_match = re.search(r"([a-zA-Z0-9_\- ]+)$", prompt.strip())
+        if fallback_match:
+            entity = fallback_match.group(1).strip()
+            entity = re.sub(r"[.?!,;:]$", "", entity)
+            return entity
+
+        # Fallback: look for the first capitalized word (legacy behavior)
+        cap_match = re.search(r"([A-Z][a-zA-Z0-9_]*)", original)
+        if cap_match:
+            return cap_match.group(1)
+
+        return ""
+
+    def get_file_extension(self) -> str:
+        """
+        Get the standard file extension for Python files.
+
+        Returns:
+            str: File extension for Python ("py")
+        """
+        return "py"
 
     def get_required_components(self) -> List[str]:
         """
@@ -157,13 +228,12 @@ class PythonTemplate(LanguageTemplate):
         # For endpoints, use the endpoint path and method from kwargs if available
         endpoint_path = kwargs.get("endpoint_path", "")
         method = kwargs.get("method", "").lower()
-
         if endpoint_path and method:
             # Extract the last segment of the path for the filename
             path_segments = endpoint_path.strip("/").split("/")
             last_segment = path_segments[-1] if path_segments else endpoint_path
             endpoint_file = f"endpoints/{last_segment}.{method}.py"
-            api_docs_file = f"docs/{last_segment}.md"
+            api_docs_file = f"docs/{last_segment}.{method}.md"
         else:
             # Fallback to entity-based naming if endpoint path is not provided
             endpoint_file = f"endpoints/{snake_case_entity}.py"
@@ -268,42 +338,6 @@ class PythonTemplate(LanguageTemplate):
             # Log the exception but don't crash
             return None
 
-    def extract_entity_from_prompt(self, prompt: str) -> Optional[str]:
-        """
-        Extract an entity name from a natural language prompt.
-        Returns a single entity name as a string.
-        """
-        import re
-
-        prompt = prompt.lower()
-
-        # Regex patterns to match different common phrases
-        patterns = [
-            r"\bfor managing (\w+)",  # for managing users
-            r"\bto manage (\w+)",  # to manage users
-            r"\bfor (\w+)",  # for users
-            r"\bto create (\w+)",  # to create cars
-            r"\bto delete (\w+)",  # to delete accounts
-            r"\babout (\w+)",  # about employees
-            r"\bof (\w+)",  # list of cars
-            r"\bwith (\w+)",  # with employees
-        ]
-
-        for pattern in patterns:
-            matches = re.findall(pattern, prompt)
-            if matches:
-                entity = matches[0]
-                # Basic plural to singular
-                if entity.endswith("ies"):
-                    entity = entity[:-3] + "y"
-                elif entity.endswith("s") and not entity.endswith("ss"):
-                    entity = entity[:-1]
-                return entity.capitalize()
-
-        # Fallback to capitalized word if no matches found
-        match = re.search(r"\b([A-Z][a-zA-Z0-9_]*)\b", prompt)
-        return match.group(1) if match else "Temp"
-
     async def generate_component(
         self,
         component_type: str,
@@ -344,7 +378,12 @@ class PythonTemplate(LanguageTemplate):
         # Get the template name
         template_name = template_map[component_type]
 
-        # Prepare template variables
+        # Enhanced context reading for endpoint components
+        related_endpoints = []
+        if component_type == "endpoint":
+            related_endpoints = await self._read_related_endpoints(
+                project_id, entity_name, **kwargs
+            )  # Prepare template variables
         template_vars = {
             "entity_name": entity_name,
             "entity_description": entity_description,
@@ -359,6 +398,12 @@ class PythonTemplate(LanguageTemplate):
             "model_code": kwargs.get("model_code", ""),
             "schema_code": kwargs.get("schema_code", ""),
             "latest_migration_id": kwargs.get("latest_migration_id", ""),
+            # Pass current file content for context-aware updates
+            "current_code": kwargs.get("current_code", None),
+            # Enhanced context: related endpoint files
+            "related_endpoints": related_endpoints,
+            # Enhanced context: similar endpoint patterns
+            "similar_endpoints": kwargs.get("similar_endpoints", {}),
         }
 
         # Generate code using PromptManager template
@@ -497,14 +542,11 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
         storage_dir = project_dir / "storage" / "db"
         storage_dir.mkdir(exist_ok=True, parents=True)
         sqlite_path = storage_dir / "db.sqlite"
-
         logger.info(f"Storage directory: {storage_dir}")
         logger.info(f"SQLite path: {sqlite_path}")
 
         # Make sure database connection works
         try:
-            import sqlite3
-
             conn = sqlite3.connect(str(sqlite_path))
             cursor = conn.cursor()
 
@@ -627,8 +669,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
             result["database_path"] = str(sqlite_path)
             # If we successfully updated the database, commit it to Git
             if result["success"] and sqlite_path.exists():
-                try:
-                    # Get the project_id from the project_dir path
+                try:  # Get the project_id from the project_dir path
                     project_id = project_dir.name
 
                     # Read the database as binary data
@@ -636,7 +677,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
                         sqlite_data = f.read()
 
                     relative_path = str(sqlite_path.relative_to(project_dir))
-                    commit_message = f"Update SQLite database with new tables: {', '.join(tables_created)}"
+                    commit_message = f"Update SQLite database with new tables - {', '.join(tables_created)}"
 
                     # Use the GitService to commit the binary file
                     commit_result = await GitService.commit_binary_file_update(
@@ -670,266 +711,17 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
         logger.info(f"Migration process completed with success={result['success']}")
         return result
 
-    async def generate_migration(self, project_dir: Path, entity_name: str) -> dict:
-        """
-        Generates migration files for an entity without applying them.
-        This is separated from run_migrations to allow users to explicitly trigger migrations later.
-
-        Returns:
-            dict: Dictionary containing migration files and component information
-        """
-        logger.info(f"Generating migration for {entity_name} in {project_dir}")
-        result = {"migration_files": [], "migration_component": None}
-
-        # Set up directories
-        versions_dir = project_dir / "alembic" / "versions"
-        versions_dir.mkdir(exist_ok=True, parents=True)
-
-        # Find latest migration ID
-        latest_migration_id = self._find_latest_migration_id(project_dir, versions_dir)
-
-        # Get model code for template context
-        snake_case_entity = self._to_snake_case(entity_name)
-        model_file = project_dir / "models" / f"{snake_case_entity}.py"
-        model_code = ""
-
-        if model_file.exists():
-            try:
-                model_code = model_file.read_text()
-                logger.info(f"Found model file: {model_file}")
-            except Exception as e:
-                logger.warning(f"Could not read model file: {str(e)}")
-
-        # Generate migration using template
-        logger.info(
-            f"Generating migration with template using parent ID: {latest_migration_id}"
-        )
-        try:
-            from app.api.v1.services.langchain_service import LangchainService
-
-            migration_result = await LangchainService.generate_code_with_template(
-                template_name="migration",
-                language="python",
-                entity_name=entity_name,
-                latest_migration_id=latest_migration_id,
-                model_code=model_code,
-            )
-
-            migration_content = migration_result.get("generated_code", "")
-            if not migration_content:
-                raise ValueError("Failed to generate migration content from template")
-
-            # Log the first few lines for debugging
-            first_lines = "\n".join(migration_content.split("\n")[:10])
-            logger.info(f"Generated migration content (first 10 lines):\n{first_lines}")
-
-            # Fix PostgreSQL-specific types for SQLite
-            migration_content = migration_content.replace(
-                "from sqlalchemy.dialects.postgresql import UUID",
-                "# Using String type instead of UUID for SQLite compatibility",
-            )
-            migration_content = migration_content.replace(
-                "UUID(as_uuid=True)", "sa.String()"
-            )
-
-            # Fix empty down_revision or incorrect down_revision
-            if (
-                "down_revision = ''" in migration_content
-                or 'down_revision = ""' in migration_content
-            ):
-                migration_content = re.sub(
-                    r"down_revision\s*=\s*['\"]?['\"]",
-                    f"down_revision = '{latest_migration_id}'",
-                    migration_content,
-                )
-                logger.info(f"Fixed empty down_revision to use {latest_migration_id}")
-
-            # Make sure the migration references the correct parent
-            down_rev_pattern = r"down_revision\s*=\s*['\"]([^'\"]+)['\"]"
-            current_down_rev = re.search(down_rev_pattern, migration_content)
-            if current_down_rev and current_down_rev.group(1) != latest_migration_id:
-                migration_content = re.sub(
-                    down_rev_pattern,
-                    f"down_revision = '{latest_migration_id}'",
-                    migration_content,
-                )
-                logger.info(
-                    f"Updated down_revision to use correct parent: {latest_migration_id}"
-                )
-
-            # Check for existing migration for this entity
-            existing_migration = False
-            for existing_file in versions_dir.glob("*.py"):
-                try:
-                    content = existing_file.read_text()
-                    if (
-                        f"op.create_table('{snake_case_entity}s'" in content
-                        or f'op.create_table("{snake_case_entity}s"' in content
-                    ):
-                        existing_migration = True
-                        logger.info(
-                            f"Found existing migration for {entity_name} at {existing_file}"
-                        )
-                        break
-                except Exception:
-                    pass
-
-            if not existing_migration:
-                # Write the migration file
-                migration_file = versions_dir / f"create_{snake_case_entity}_table.py"
-                logger.info(f"Creating migration file: {migration_file}")
-                with open(migration_file, "w") as f:
-                    f.write(migration_content)
-
-                # Add to result
-                from app.api.v1.services.langchain_service import LangchainService
-
-                migration_file_info = {
-                    "file_path": str(migration_file.relative_to(project_dir)),
-                    "generated_code": migration_content,
-                    "content_base64": LangchainService.encode_content(
-                        migration_content
-                    ),
-                    "file_hash": LangchainService.generate_file_hash(migration_content),
-                }
-                result["migration_files"].append(migration_file_info)
-
-                # Create migration component info
-                result["migration_component"] = {
-                    "file_path": str(migration_file.relative_to(project_dir)),
-                    "generated_code": migration_content,
-                    "content_base64": LangchainService.encode_content(
-                        migration_content
-                    ),
-                    "file_hash": LangchainService.generate_file_hash(migration_content),
-                    "entity_name": entity_name,
-                }
-            else:
-                logger.info(
-                    f"Skipping migration creation as it already exists for {entity_name}"
-                )
-
-        except Exception as e:
-            logger.error(f"Error generating migration: {str(e)}")
-
-        return result
-
-    def _find_latest_migration_id(self, project_dir: Path, versions_dir: Path) -> str:
-        """
-        Determines the latest Alembic migration ID for a given project.
-        This method attempts to find the most recent migration revision by:
-          1. Parsing all migration files in the specified versions directory to identify head revisions.
-          2. If no head revision is found in the files, querying the project's SQLite database for the current Alembic version.
-          3. If neither approach yields a result, returning a default migration ID.
-        Args:
-            project_dir (Path): The root directory of the project, used to locate the SQLite database.
-            versions_dir (Path): The directory containing Alembic migration files.
-        Returns:
-            str: The latest migration ID, either determined from migration files, the database, or a default value.
-        """
-        latest_migration_id = None
-        try:
-            # Find the latest migration ID from existing files
-            migration_files = list(versions_dir.glob("*.py"))
-
-            if migration_files:
-                logger.info(f"Listing migrations directly from {versions_dir}")
-                logger.info(f"Found {len(migration_files)} migration files:")
-
-                revision_ids = {}
-                for migration_file in migration_files:
-                    try:
-                        content = migration_file.read_text()
-                        rev_match = re.search(
-                            r"revision\s*=\s*['\"]([^'\"]+)['\"]", content
-                        )
-                        if rev_match:
-                            rev_id = rev_match.group(1)
-                            down_rev_match = re.search(
-                                r"down_revision\s*=\s*([^,\n]+)", content
-                            )
-                            down_rev = None
-                            if down_rev_match:
-                                down_rev_str = down_rev_match.group(1).strip()
-                                if down_rev_str not in ("None", "none", "''", '""'):
-                                    down_rev = down_rev_str.strip("'\"")
-                            revision_ids[rev_id] = down_rev
-                            logger.info(
-                                f"  - {migration_file.name}: revision={rev_id}, down_revision={down_rev}"
-                            )
-                    except Exception as e:
-                        logger.warning(
-                            f"Error reading migration {migration_file}: {str(e)}"
-                        )
-
-                # Find head revisions
-                if revision_ids:
-                    all_revs = set(revision_ids.keys())
-                    child_revs = set(r for r in revision_ids.values() if r is not None)
-                    head_revs = all_revs - child_revs
-
-                    if head_revs:
-                        latest_migration_id = list(head_revs)[
-                            0
-                        ]  # Just take the first one if multiple heads
-                        logger.info(
-                            f"Found head revisions through direct parsing: {head_revs}"
-                        )
-                        logger.info(
-                            f"Using latest migration ID from direct parsing: {latest_migration_id}"
-                        )
-
-            if not latest_migration_id:
-                # Try to get it from the database if it exists
-                sqlite_path = project_dir / "storage" / "db" / "db.sqlite"
-                if sqlite_path.exists():
-                    try:
-                        import sqlite3
-
-                        conn = sqlite3.connect(str(sqlite_path))
-                        cursor = conn.cursor()
-
-                        # Check if alembic_version table exists
-                        cursor.execute(
-                            "SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version';"
-                        )
-                        has_alembic_table = cursor.fetchone() is not None
-
-                        if has_alembic_table:
-                            cursor.execute("SELECT version_num FROM alembic_version;")
-                            version_row = cursor.fetchone()
-                            if version_row:
-                                latest_migration_id = version_row[0]
-                                logger.info(
-                                    f"Using current database version as latest: {latest_migration_id}"
-                                )
-
-                        conn.close()
-                    except Exception as e:
-                        logger.warning(f"Error checking database version: {str(e)}")
-
-            if not latest_migration_id:
-                # If still no head found, use a default
-                latest_migration_id = "e77b933ce306"  # Use a default ID
-                logger.info(
-                    f"No head revisions found, using default ID: {latest_migration_id}"
-                )
-        except Exception as e:
-            logger.warning(f"Error finding latest migration ID: {str(e)}")
-            latest_migration_id = "e77b933ce306"  # Use a default ID
-
-        return latest_migration_id
-
     async def run_migrations_with_logs(self, project_dir: Path, logger) -> dict:
         """
         Runs simplified database migrations while streaming logs to the provided logger.
+        This is the same as run_migrations but with real-time log streaming for frontend display.
 
         Args:
             project_dir (Path): The root directory of the project
-            logger: An async logger object to stream logs to
+            logger: An async logger object to stream logs to the frontend
 
         Returns:
-            dict: Migration results
+            dict: Migration results with success status, database path, message, and tables created
         """
         await logger.info(f"Running simplified migrations in {project_dir}")
         result = {
@@ -944,14 +736,11 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
         storage_dir = project_dir / "storage" / "db"
         storage_dir.mkdir(exist_ok=True, parents=True)
         sqlite_path = storage_dir / "db.sqlite"
-
         await logger.info(f"Storage directory: {storage_dir}")
         await logger.info(f"SQLite path: {sqlite_path}")
 
         # Make sure database connection works
         try:
-            import sqlite3
-
             conn = sqlite3.connect(str(sqlite_path))
             cursor = conn.cursor()
 
@@ -1109,9 +898,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
                     project_id = project_dir.name
                     await logger.info(
                         f"Committing changes to Git (project_id: {project_id})"
-                    )
-
-                    # Read the database as binary data
+                    )  # Read the database as binary data
                     with open(sqlite_path, "rb") as f:
                         sqlite_data = f.read()
                     await logger.info(
@@ -1119,7 +906,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
                     )
 
                     relative_path = str(sqlite_path.relative_to(project_dir))
-                    commit_message = f"Update SQLite database with new tables: {', '.join(tables_created)}"
+                    commit_message = f"Update SQLite database with new tables - {', '.join(tables_created)}"
 
                     # Use the GitService to commit the binary file
                     await logger.info(
@@ -1157,3 +944,827 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
             f"Migration process completed with success={result['success']}"
         )
         return result
+
+    def _find_latest_migration_id(self, project_dir: Path, versions_dir: Path) -> str:
+        """
+        Find the latest Alembic migration revision ID in the versions directory.
+        Returns the revision ID as a string, or an empty string if none found.
+        """
+        migration_files = sorted(
+            versions_dir.glob("*.py"), key=os.path.getmtime, reverse=True
+        )
+        for migration_file in migration_files:
+            with open(migration_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip().startswith("revision"):
+                        parts = line.split("=")
+                        if len(parts) == 2:
+                            return parts[1].strip().strip("'\"")
+        return ""
+
+    async def generate_migration(self, project_dir: str, entity_name: str) -> dict:
+        # Convert string to Path object if needed
+        if isinstance(project_dir, str):
+            project_dir = Path(project_dir)
+
+        log_path = project_dir / "migration_codegen.log"
+        logger = logging.getLogger("migration_codegen")
+        logger.setLevel(logging.INFO)
+        fh = logging.FileHandler(log_path, mode="a", encoding="utf-8")
+        fh.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s:%(name)s:%(message)s")
+        )
+        if not any(
+            isinstance(h, logging.FileHandler) and h.baseFilename == str(log_path)
+            for h in logger.handlers
+        ):
+            logger.addHandler(fh)
+        result = {
+            "migration_files": [],
+            "migration_component": None,
+            "migration_status": "unknown",
+            "error": None,
+        }
+        try:
+            logger.info(f"Starting migration generation for entity: {entity_name}")
+            fh.flush()  # Set up Alembic config with absolute paths
+            alembic_dir = project_dir / "alembic"
+            versions_dir = alembic_dir / "versions"
+            alembic_ini = project_dir / "alembic.ini"
+
+            # Convert to absolute paths to avoid any path confusion
+            alembic_dir = alembic_dir.resolve()
+            versions_dir = versions_dir.resolve()
+            alembic_ini = alembic_ini.resolve()
+
+            versions_dir.mkdir(parents=True, exist_ok=True)
+            db_path = (
+                project_dir / "storage" / "db" / "db.sqlite"
+            ).resolve()  # Ensure alembic.ini exists (copy from template if needed)
+            if not alembic_ini.exists():
+                template_ini = (
+                    Path(__file__).parent.parent.parent.parent.parent.parent
+                    / "project_template"
+                    / "python"
+                    / "alembic.ini"
+                )
+                if template_ini.exists():
+                    shutil.copy(template_ini, alembic_ini)
+
+            # Ensure env.py exists (copy from template if needed)
+            env_py_path = alembic_dir / "env.py"
+            if not env_py_path.exists():
+                template_env = (
+                    Path(__file__).parent.parent.parent.parent.parent.parent
+                    / "project_template"
+                    / "python"
+                    / "alembic"
+                    / "env.py"
+                )
+                if template_env.exists():
+                    shutil.copy(template_env, env_py_path)
+
+            # Ensure script.py.mako exists (copy from template if needed)
+            script_mako_path = alembic_dir / "script.py.mako"
+            if not script_mako_path.exists():
+                template_script = (
+                    Path(__file__).parent.parent.parent.parent.parent.parent
+                    / "project_template"
+                    / "python"
+                    / "alembic"
+                    / "script.py.mako"
+                )
+                if template_script.exists():
+                    shutil.copy(template_script, script_mako_path)
+
+            # Ensure core/database.py exists (copy from template if needed)
+            core_dir = project_dir / "core"
+            core_dir.mkdir(exist_ok=True)
+            database_py_path = core_dir / "database.py"
+            if not database_py_path.exists():
+                template_database = (
+                    Path(__file__).parent.parent.parent.parent.parent.parent
+                    / "project_template"
+                    / "python"
+                    / "core"
+                    / "database.py"
+                )
+                if template_database.exists():
+                    shutil.copy(template_database, database_py_path)
+
+            # Create core/__init__.py if it doesn't exist
+            core_init_path = core_dir / "__init__.py"
+            if not core_init_path.exists():
+                core_init_path.write_text("")
+            # Patch alembic.ini to point to the correct SQLite DB
+
+            config = configparser.ConfigParser()
+            config.read(alembic_ini)
+            if "alembic" not in config:
+                config["alembic"] = {}
+            config["alembic"]["sqlalchemy.url"] = f"sqlite:///{db_path}"
+            with open(alembic_ini, "w") as f:
+                config.write(f)
+            # Alembic Config
+
+            alembic_cfg = Config(str(alembic_ini))
+            alembic_cfg.set_main_option("script_location", str(alembic_dir))
+            alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+            logger.info(f"Using Alembic config: {alembic_ini}")
+            fh.flush()
+            logger.info(f"Using database path: {db_path}")
+            fh.flush()
+            logger.info(f"Importing all models from {project_dir / 'models'}")
+            fh.flush()
+
+            project_dir_abs = project_dir.resolve()
+            if str(project_dir_abs) not in sys.path:
+                sys.path.insert(0, str(project_dir_abs))
+            models_dir = project_dir / "models"
+            if models_dir.exists():
+                for file in os.listdir(models_dir):
+                    if file.endswith(".py") and not file.startswith("__"):
+                        module_name = f"models.{file[:-3]}"
+                        try:
+                            importlib.import_module(module_name)
+                            logger.info(f"Imported model module: {module_name}")
+                            fh.flush()
+                        except Exception as e:
+                            logger.warning(f"Could not import {module_name}: {e}")
+                            fh.flush()  # Find latest migration ID
+            migration_id = uuid.uuid4().hex[:12]
+            migration_msg = f"autogenerated migration for {entity_name or 'project'}"  # Use subprocess to run Alembic commands to avoid terminal conflicts
+            logger.info("Running Alembic upgrade head before autogenerate...")
+            fh.flush()
+            try:  # Run upgrade in subprocess to avoid terminal interaction issues
+                upgrade_result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        f"from alembic.config import Config; from alembic import command; "
+                        f"cfg = Config({repr(str(alembic_ini))}); cfg.set_main_option('script_location', {repr(str(alembic_dir))}); "
+                        f"cfg.set_main_option('sqlalchemy.url', {repr(f'sqlite:///{db_path}')}); "
+                        f"command.upgrade(cfg, 'head')",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    env={
+                        **os.environ,
+                        "PYTHONPATH": str(project_dir_abs),
+                        "TERM": "dumb",
+                        "PYTHONIOENCODING": "utf-8",
+                    },
+                )
+
+                if upgrade_result.returncode != 0:
+                    logger.error(f"Alembic upgrade failed: {upgrade_result.stderr}")
+                    fh.flush()
+                    result["migration_status"] = "failed"
+                    result["error"] = f"Upgrade failed: {upgrade_result.stderr}"
+                    return result
+                logger.info("Alembic upgrade head completed.")
+                fh.flush()
+            except subprocess.TimeoutExpired:
+                logger.error("Alembic upgrade timed out after 60 seconds")
+                fh.flush()
+                result["migration_status"] = "failed"
+                result["error"] = "Upgrade timed out after 60 seconds"
+                return result
+            except Exception as e:
+                logger.error(f"Alembic upgrade subprocess failed: {e}", exc_info=True)
+                fh.flush()
+                result["migration_status"] = "failed"
+                result["error"] = f"Upgrade subprocess failed: {e}"
+                return result
+
+            logger.info("Running Alembic autogenerate...")
+            fh.flush()
+            try:  # Run autogenerate in subprocess to avoid terminal interaction issues
+                revision_result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        f"from alembic.config import Config; from alembic import command; "
+                        f"cfg = Config({repr(str(alembic_ini))}); cfg.set_main_option('script_location', {repr(str(alembic_dir))}); "
+                        f"cfg.set_main_option('sqlalchemy.url', {repr(f'sqlite:///{db_path}')}); "
+                        f"command.revision(cfg, message='{migration_msg}', autogenerate=True, rev_id='{migration_id}')",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    env={
+                        **os.environ,
+                        "PYTHONPATH": str(project_dir_abs),
+                        "TERM": "dumb",
+                        "PYTHONIOENCODING": "utf-8",
+                    },
+                )
+
+                if revision_result.returncode != 0:
+                    logger.error(
+                        f"Alembic autogenerate failed: {revision_result.stderr}"
+                    )
+                    fh.flush()
+                    result["migration_status"] = "failed"
+                    result["error"] = f"Autogenerate failed: {revision_result.stderr}"
+                    return result
+                logger.info("Alembic autogenerate completed.")
+                fh.flush()
+                result["migration_status"] = "success"
+            except subprocess.TimeoutExpired:
+                logger.error("Alembic autogenerate timed out after 120 seconds")
+                fh.flush()
+                result["migration_status"] = "failed"
+                result["error"] = "Autogenerate timed out after 120 seconds"
+                return result
+            except Exception as e:
+                logger.error(
+                    f"Alembic autogenerate subprocess failed: {e}", exc_info=True
+                )
+                fh.flush()
+                result["migration_status"] = "failed"
+                result["error"] = f"Autogenerate subprocess failed: {e}"
+                return result  # Find the latest migration file
+            migration_files = sorted(
+                versions_dir.glob("*.py"), key=os.path.getmtime, reverse=True
+            )
+            if migration_files:
+                migration_file = migration_files[0]
+                with open(migration_file, "r") as f:
+                    migration_content = f.read()
+                # Ensure project_dir is absolute for relative_to calculation
+                project_dir_abs = (
+                    project_dir.resolve()
+                    if hasattr(project_dir, "resolve")
+                    else Path(project_dir).resolve()
+                )
+                migration_file_info = {
+                    "file_path": migration_file.relative_to(project_dir_abs).as_posix(),
+                    "generated_code": migration_content,
+                    "content_base64": LangchainService.encode_content(
+                        migration_content
+                    ),
+                    "file_hash": LangchainService.generate_file_hash(migration_content),
+                }
+                result["migration_files"].append(migration_file_info)
+                result["migration_component"] = {
+                    "file_path": migration_file.relative_to(project_dir_abs).as_posix(),
+                    "generated_code": migration_content,
+                    "content_base64": LangchainService.encode_content(
+                        migration_content
+                    ),
+                    "file_hash": LangchainService.generate_file_hash(migration_content),
+                    "entity_name": entity_name,
+                }
+                result["migration_status"] = "success"
+            else:
+                logger.warning("No migration files found after autogenerate")
+                fh.flush()
+                result["migration_status"] = "failed"
+                result["error"] = "No migration files found after autogenerate"
+        except Exception as e:
+            logger.error(f"Migration generation failed: {e}", exc_info=True)
+            fh.flush()
+            result["migration_status"] = "failed"
+            result["error"] = str(e)
+        finally:
+            fh.close()  # Ensure function always returns here so the rest of the flow continues
+        return result
+
+    async def _read_related_endpoints(
+        self, project_id: str, entity_name: str, **kwargs
+    ) -> List[Dict[str, Any]]:
+        """
+        Read related endpoint files for the same endpoint path but different HTTP methods.
+
+        Args:
+            project_id (str): The project identifier
+            entity_name (str): The entity name
+            **kwargs: Additional parameters including endpoint_path and method
+
+        Returns:
+            List[Dict[str, Any]]: List of related endpoint information
+        """
+        related_endpoints = []
+
+        try:
+            endpoint_path = kwargs.get("endpoint_path", "")
+            current_method = kwargs.get("method", "").lower()
+
+            if not endpoint_path:
+                logger.debug(
+                    "No endpoint_path provided, skipping related endpoints reading"
+                )
+                return related_endpoints
+
+            # Extract the last segment of the path for filename matching
+            path_segments = endpoint_path.strip("/").split("/")
+            last_segment = path_segments[-1] if path_segments else endpoint_path
+
+            # Define common HTTP methods to check for
+            http_methods = ["get", "post", "put", "delete", "patch", "head", "options"]
+
+            # Build the project directory path
+            from pathlib import Path
+
+            project_dir = Path("repos") / project_id
+            endpoints_dir = project_dir / "endpoints"
+
+            if not endpoints_dir.exists():
+                logger.debug(f"Endpoints directory {endpoints_dir} does not exist")
+                return related_endpoints
+
+            # Check for related endpoint files
+            for method in http_methods:
+                if method == current_method:
+                    continue  # Skip the current method we're generating
+
+                endpoint_file = endpoints_dir / f"{last_segment}.{method}.py"
+
+                if endpoint_file.exists():
+                    try:
+                        with open(endpoint_file, "r", encoding="utf-8") as f:
+                            file_content = f.read()
+
+                        # Extract key information from the endpoint file
+                        endpoint_info = {
+                            "method": method.upper(),
+                            "file_path": str(endpoint_file.relative_to(project_dir)),
+                            "content": file_content,
+                            "entity_name": self.extract_entity_from_code(file_content)
+                            or entity_name,
+                            "has_database_operations": self.needs_database(
+                                file_content
+                            ),
+                            "has_schema_usage": self.needs_schema(file_content),
+                            "has_helper_usage": self.needs_helpers(file_content),
+                        }  # Extract route patterns and function names for additional context
+                        route_pattern = re.search(
+                            r'@router\.\w+\([\'"]([^\'"]+)[\'"]', file_content
+                        )
+                        if route_pattern:
+                            endpoint_info["route_pattern"] = route_pattern.group(1)
+
+                        function_pattern = re.search(r"def\s+(\w+)\s*\(", file_content)
+                        if function_pattern:
+                            endpoint_info["function_name"] = function_pattern.group(1)
+
+                        related_endpoints.append(endpoint_info)
+                        logger.info(
+                            f"Found related endpoint: {method.upper()} {endpoint_path} -> {endpoint_file}"
+                        )
+
+                    except Exception as e:
+                        logger.warning(
+                            f"Error reading related endpoint file {endpoint_file}: {str(e)}"
+                        )
+
+            logger.info(
+                f"Found {len(related_endpoints)} related endpoint files for {endpoint_path}"
+            )
+
+        except Exception as e:
+            logger.error(f"Error in _read_related_endpoints: {str(e)}")
+
+        return related_endpoints
+
+    async def discover_similar_endpoint_patterns(
+        self,
+        project_id: str,
+        endpoint_path: str,
+        method: str,
+        entity_name: str,
+        **kwargs,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Discover and read similar endpoint patterns to provide enhanced context for code generation.
+
+        This method finds:
+        1. Related endpoints (same path, different methods)
+        2. Similar path endpoints (similar URL patterns)
+        3. Same method endpoints (same HTTP method, different entities)
+        4. Entity-related endpoints (endpoints working with related entities)
+
+        Args:
+            project_id (str): The project identifier
+            endpoint_path (str): The current endpoint path
+            method (str): The current HTTP method
+            entity_name (str): The current entity name
+            **kwargs: Additional parameters        Returns:
+            Dict[str, List[Dict[str, Any]]]: Categorized similar endpoints context
+        """
+        context = {
+            "related_endpoints": [],  # Same path, different methods
+            "similar_paths": [],  # Similar URL patterns
+            "same_method_endpoints": [],  # Same method, different entities
+            "entity_related": [],  # Related entity endpoints
+        }
+
+        try:
+            project_dir = Path("repos") / project_id
+            endpoints_dir = project_dir / "endpoints"
+
+            if not endpoints_dir.exists():
+                logger.debug(f"Endpoints directory {endpoints_dir} does not exist")
+                return context
+
+            # Get related endpoints (same path, different methods)
+            context["related_endpoints"] = await self._read_related_endpoints(
+                project_id, entity_name, endpoint_path=endpoint_path, method=method
+            )
+
+            # Discover all endpoint files for pattern analysis
+            all_endpoint_files = self._discover_all_endpoint_files(endpoints_dir)
+
+            # Extract current endpoint components for similarity matching
+            current_path_segments = endpoint_path.strip("/").split("/")
+            current_entity = entity_name.lower() if entity_name else ""
+            current_method_lower = method.lower()
+
+            for endpoint_file_info in all_endpoint_files:
+                try:
+                    file_path = endpoint_file_info["file_path"]
+                    file_method = endpoint_file_info["method"]
+                    file_entity = endpoint_file_info["entity"]
+                    file_content = endpoint_file_info["content"]
+                    file_url_path = endpoint_file_info["url_path"]
+
+                    # Skip if it's the current endpoint or already in related endpoints
+                    if (
+                        file_url_path == endpoint_path
+                        and file_method.lower() == current_method_lower
+                    ):
+                        continue
+
+                    # Check for similar paths (shared path segments or patterns)
+                    if self._has_similar_path_pattern(
+                        current_path_segments, file_url_path
+                    ):
+                        context["similar_paths"].append(
+                            {
+                                "method": file_method.upper(),
+                                "path": file_url_path,
+                                "file_path": file_path,
+                                "entity_name": file_entity,
+                                "content_preview": self._extract_content_preview(
+                                    file_content
+                                ),
+                                "route_pattern": self._extract_route_pattern(
+                                    file_content
+                                ),
+                                "function_name": self._extract_function_name(
+                                    file_content
+                                ),
+                                "has_database_operations": self.needs_database(
+                                    file_content
+                                ),
+                                "similarity_score": self._calculate_path_similarity(
+                                    current_path_segments, file_url_path
+                                ),
+                            }
+                        )
+
+                    # Check for same method endpoints (different entities)
+                    if (
+                        file_method.lower() == current_method_lower
+                        and file_entity != current_entity
+                        and file_entity
+                    ):
+                        context["same_method_endpoints"].append(
+                            {
+                                "method": file_method.upper(),
+                                "path": file_url_path,
+                                "file_path": file_path,
+                                "entity_name": file_entity,
+                                "content_preview": self._extract_content_preview(
+                                    file_content
+                                ),
+                                "route_pattern": self._extract_route_pattern(
+                                    file_content
+                                ),
+                                "function_name": self._extract_function_name(
+                                    file_content
+                                ),
+                                "has_database_operations": self.needs_database(
+                                    file_content
+                                ),
+                            }
+                        )
+
+                    # Check for entity-related endpoints
+                    if file_entity != current_entity and self._entities_are_related(
+                        current_entity, file_entity
+                    ):
+                        context["entity_related"].append(
+                            {
+                                "method": file_method.upper(),
+                                "path": file_url_path,
+                                "file_path": file_path,
+                                "entity_name": file_entity,
+                                "content_preview": self._extract_content_preview(
+                                    file_content
+                                ),
+                                "route_pattern": self._extract_route_pattern(
+                                    file_content
+                                ),
+                                "function_name": self._extract_function_name(
+                                    file_content
+                                ),
+                                "has_database_operations": self.needs_database(
+                                    file_content
+                                ),
+                                "relationship_type": self._determine_entity_relationship(
+                                    current_entity, file_entity
+                                ),
+                            }
+                        )
+
+                except Exception as e:
+                    logger.warning(
+                        f"Error processing endpoint file {endpoint_file_info.get('file_path', 'unknown')}: {str(e)}"
+                    )
+
+            # Sort and limit results for performance
+            context["similar_paths"] = sorted(
+                context["similar_paths"],
+                key=lambda x: x.get("similarity_score", 0),
+                reverse=True,
+            )[:5]
+            context["same_method_endpoints"] = context["same_method_endpoints"][:5]
+            context["entity_related"] = context["entity_related"][:5]
+
+            total_found = sum(len(context[key]) for key in context)
+            logger.info(
+                f"Discovered {total_found} similar endpoint patterns for context enhancement"
+            )
+
+        except Exception as e:
+            logger.error(f"Error in discover_similar_endpoint_patterns: {str(e)}")
+
+        return context
+
+    def _discover_all_endpoint_files(self, endpoints_dir: Path) -> List[Dict[str, Any]]:
+        """
+        Discover all endpoint files in the endpoints directory structure.
+
+        Args:
+            endpoints_dir (Path): Path to the endpoints directory
+
+        Returns:
+            List[Dict[str, Any]]: List of endpoint file information
+        """
+        endpoint_files = []
+
+        try:
+            for file_path in endpoints_dir.rglob("*.py"):
+                if file_path.name.startswith("__"):
+                    continue  # Skip __init__.py and other special files
+
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+
+                    # Extract method from filename (e.g., "users.get.py" -> "get")
+                    method = self._extract_method_from_filename(file_path.name)
+
+                    # Extract entity from filename or content
+                    entity = self._extract_entity_from_filename(
+                        file_path.name
+                    ) or self.extract_entity_from_code(content)
+
+                    # Extract URL path from file structure and content
+                    url_path = self._extract_url_path_from_file(
+                        file_path, endpoints_dir, content
+                    )
+
+                    endpoint_files.append(
+                        {
+                            "file_path": str(
+                                file_path.relative_to(endpoints_dir.parent)
+                            ),
+                            "method": method or "UNKNOWN",
+                            "entity": entity or "",
+                            "url_path": url_path,
+                            "content": content,
+                        }
+                    )
+
+                except Exception as e:
+                    logger.warning(f"Error reading endpoint file {file_path}: {str(e)}")
+
+        except Exception as e:
+            logger.error(f"Error discovering endpoint files: {str(e)}")
+
+        return endpoint_files
+
+    def _extract_method_from_filename(self, filename: str) -> Optional[str]:
+        """Extract HTTP method from filename (e.g., 'users.get.py' -> 'get')."""
+        parts = filename.replace(".py", "").split(".")
+        http_methods = ["get", "post", "put", "delete", "patch", "head", "options"]
+
+        for part in reversed(parts):
+            if part.lower() in http_methods:
+                return part.lower()
+        return None
+
+    def _extract_entity_from_filename(self, filename: str) -> Optional[str]:
+        """Extract entity name from filename (e.g., 'users.get.py' -> 'users')."""
+        base_name = filename.replace(".py", "")
+        parts = base_name.split(".")
+
+        # Return the first part as the potential entity name
+        if parts and parts[0]:
+            return self._to_singular_entity_name(parts[0])
+        return None
+
+    def _extract_url_path_from_file(
+        self, file_path: Path, endpoints_dir: Path, content: str
+    ) -> str:
+        """Extract URL path from file structure and content."""  # First try to extract from route decorator in content
+        route_match = re.search(r'@router\.\w+\([\'"]([^\'"]+)[\'"]', content)
+        if route_match:
+            return route_match.group(1)
+
+        # Fallback to file structure
+        relative_path = file_path.relative_to(endpoints_dir)
+        path_parts = list(relative_path.parts[:-1])  # Exclude filename
+
+        # Extract base name without method
+        filename_base = file_path.stem
+        if "." in filename_base:
+            filename_base = filename_base.split(".")[0]
+
+        path_parts.append(filename_base)
+        return "/" + "/".join(path_parts) if path_parts else f"/{filename_base}"
+
+    def _has_similar_path_pattern(
+        self, current_segments: List[str], other_path: str
+    ) -> bool:
+        """Check if two paths have similar patterns."""
+        other_segments = other_path.strip("/").split("/")
+
+        # Skip empty paths
+        if not current_segments or not other_segments:
+            return False
+
+        # Check for shared segments
+        current_set = set(current_segments)
+        other_set = set(other_segments)
+        shared_segments = current_set.intersection(other_set)
+
+        # Consider similar if they share at least one meaningful segment
+        meaningful_shared = len(shared_segments) > 0 and any(
+            len(seg) > 2 for seg in shared_segments
+        )
+
+        # Also check for similar structure (same depth, similar patterns)
+        similar_structure = (
+            abs(len(current_segments) - len(other_segments)) <= 1
+            and len(current_segments) > 1
+            and len(other_segments) > 1
+        )
+
+        return meaningful_shared or similar_structure
+
+    def _calculate_path_similarity(
+        self, current_segments: List[str], other_path: str
+    ) -> float:
+        """Calculate similarity score between two paths."""
+        other_segments = other_path.strip("/").split("/")
+
+        if not current_segments or not other_segments:
+            return 0.0
+
+        # Calculate Jaccard similarity
+        current_set = set(current_segments)
+        other_set = set(other_segments)
+
+        intersection = len(current_set.intersection(other_set))
+        union = len(current_set.union(other_set))
+
+        if union == 0:
+            return 0.0
+
+        jaccard_score = intersection / union
+
+        # Bonus for similar structure
+        structure_bonus = (
+            0.1 if abs(len(current_segments) - len(other_segments)) <= 1 else 0
+        )
+
+        return min(1.0, jaccard_score + structure_bonus)
+
+    def _entities_are_related(self, entity1: str, entity2: str) -> bool:
+        """Check if two entities are related (e.g., User and UserProfile)."""
+        if not entity1 or not entity2:
+            return False
+
+        entity1_lower = entity1.lower()
+        entity2_lower = entity2.lower()
+
+        # Check for substring relationships
+        if entity1_lower in entity2_lower or entity2_lower in entity1_lower:
+            return True
+
+        # Check for common patterns
+        common_patterns = [
+            (r"user", r"profile|setting|preference|account"),
+            (r"product", r"category|order|cart|inventory"),
+            (r"order", r"item|payment|shipping|invoice"),
+            (r"post", r"comment|tag|category"),
+            (r"project", r"task|member|team"),
+        ]
+
+        for pattern1, pattern2 in common_patterns:
+            if (
+                re.search(pattern1, entity1_lower)
+                and re.search(pattern2, entity2_lower)
+            ) or (
+                re.search(pattern2, entity1_lower)
+                and re.search(pattern1, entity2_lower)
+            ):
+                return True
+
+        return False
+
+    def _determine_entity_relationship(self, entity1: str, entity2: str) -> str:
+        """Determine the type of relationship between two entities."""
+        if not entity1 or not entity2:
+            return "unknown"
+
+        entity1_lower = entity1.lower()
+        entity2_lower = entity2.lower()
+
+        # Parent-child relationships
+        if entity1_lower in entity2_lower:
+            return "parent-child"
+        if entity2_lower in entity1_lower:
+            return "child-parent"
+
+        # Domain-specific relationships
+        if "user" in entity1_lower and any(
+            term in entity2_lower for term in ["profile", "setting", "preference"]
+        ):
+            return "composition"
+        if "product" in entity1_lower and any(
+            term in entity2_lower for term in ["category", "tag"]
+        ):
+            return "classification"
+        if "order" in entity1_lower and "item" in entity2_lower:
+            return "aggregation"
+
+        return "related"
+
+    def _extract_content_preview(self, content: str) -> str:
+        """Extract a preview of the endpoint content (docstring or first few lines)."""
+        lines = content.split("\n")
+
+        # Look for docstring
+        in_docstring = False
+        docstring_lines = []
+
+        for line in lines:
+            stripped = line.strip()
+            if '"""' in stripped or "'''" in stripped:
+                if not in_docstring:
+                    in_docstring = True
+                    # Include the line with the opening quotes
+                    docstring_lines.append(stripped)
+                else:
+                    # Closing quotes
+                    docstring_lines.append(stripped)
+                    break
+            elif in_docstring:
+                docstring_lines.append(stripped)
+
+        if docstring_lines:
+            preview = " ".join(docstring_lines)
+            return preview[:200] + "..." if len(preview) > 200 else preview
+
+        # Fallback to first meaningful lines
+        meaningful_lines = [
+            line.strip()
+            for line in lines[:10]
+            if line.strip() and not line.strip().startswith("#")
+        ]
+        preview = " ".join(meaningful_lines)
+        return preview[:200] + "..." if len(preview) > 200 else preview
+
+    def _extract_route_pattern(self, content: str) -> Optional[str]:
+        """Extract route pattern from endpoint content."""
+        match = re.search(r'@router\.\w+\([\'"]([^\'"]+)[\'"]', content)
+        return match.group(1) if match else None
+
+    def _extract_function_name(self, content: str) -> Optional[str]:
+        """Extract function name from endpoint content."""
+        match = re.search(r"def\s+(\w+)\s*\(", content)
+        return match.group(1) if match else None
+
+    def _to_singular_entity_name(self, name: str) -> str:
+        """Convert plural entity name to singular (basic implementation)."""
+        if name.endswith("ies"):
+            return name[:-3] + "y"
+        elif name.endswith("s") and len(name) > 1:
+            return name[:-1]
+        return name

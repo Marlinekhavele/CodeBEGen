@@ -188,12 +188,16 @@ class GitService:
             # Get the new commit hash
             logger.info("Getting commit hash")
             commit_hash = run_git_command(["git", "rev-parse", "HEAD"], cwd=project_dir)
-            logger.info(f"Commit hash: {commit_hash}")
-
-            # Push changes
+            logger.info(
+                f"Commit hash: {commit_hash}"
+            )  # Push changes with error handling
             logger.info("Pushing changes to remote repository")
-            push_result = run_git_command(["git", "push"], cwd=project_dir)
-            logger.info(f"Push result: {push_result}")
+            try:
+                push_result = run_git_command(["git", "push"], cwd=project_dir)
+                logger.info(f"Push result: {push_result}")
+            except Exception as push_error:
+                logger.warning(f"Push failed: {str(push_error)}")
+                logger.info("Continuing with local commit only")
 
             return commit_hash
 
@@ -258,11 +262,23 @@ class GitService:
             # Write the binary content to the specified file
             logger.info(f"Writing {len(binary_content)} bytes to {full_file_path}")
             with open(full_file_path, "wb") as file:
-                file.write(binary_content)
-
-            # Stage the changes for the specified file
+                file.write(binary_content)  # Stage the changes for the specified file
             logger.info(f"Adding file to Git index: {file_path}")
             run_git_command(["git", "add", file_path], cwd=project_dir)
+
+            # Check if there are changes to commit
+            status_output = run_git_command(
+                ["git", "status", "--porcelain"], cwd=project_dir
+            )
+            logger.info(f"Git status after staging: {status_output}")
+
+            if not status_output.strip():
+                logger.info("No changes to commit")
+                # Get the current commit hash and return it
+                current_hash = run_git_command(
+                    ["git", "rev-parse", "HEAD"], cwd=project_dir
+                )
+                return current_hash
 
             # Prepare commit message
             if not commit_message:
@@ -279,20 +295,112 @@ class GitService:
                 ["git", "config", "user.email", "codebegen@example.com"],
                 cwd=project_dir,
             )
-            run_git_command(["git", "commit", "-m", commit_message], cwd=project_dir)
+
+            # Ensure commit message doesn't contain problematic characters
+            safe_commit_message = (
+                commit_message.replace('"', "'").replace("\n", " ").replace("\r", " ")
+            )
+            logger.info(f"Safe commit message: {safe_commit_message}")
+
+            run_git_command(
+                ["git", "commit", "-m", safe_commit_message], cwd=project_dir
+            )
 
             # Get the new commit hash
             logger.info("Getting commit hash")
             commit_hash = run_git_command(["git", "rev-parse", "HEAD"], cwd=project_dir)
-            logger.info(f"Commit hash: {commit_hash}")
-
-            # Push changes
+            logger.info(
+                f"Commit hash: {commit_hash}"
+            )  # Push changes with error handling
             logger.info("Pushing changes to remote repository")
-            push_result = run_git_command(["git", "push"], cwd=project_dir)
-            logger.info(f"Push result: {push_result}")
+            try:
+                push_result = run_git_command(["git", "push"], cwd=project_dir)
+                logger.info(f"Push result: {push_result}")
+            except Exception as push_error:
+                logger.warning(f"Push failed: {str(push_error)}")
+                logger.info("Continuing with local commit only")
 
             return commit_hash
 
         except Exception as e:
             logger.error(f"Git binary file operation failed: {str(e)}")
+            raise e
+
+    @staticmethod
+    async def commit_multiple_files_update(
+        project_id: str,
+        file_paths: list,
+        commit_message: str = None,
+    ) -> str:
+        """
+        Stage and commit multiple files to the project repository in a single commit.
+        Assumes all files are already written to disk at their correct locations.
+
+        Parameters:
+        project_id (str): The project ID (slug)
+        file_paths (list): List of relative file paths within the project
+        commit_message (str, optional): Custom commit message. If not provided, a default one will be used.
+
+        Returns:
+        str: The new commit hash after the changes have been committed.
+        """
+        try:
+            repo_url = get_repo_url(project_id)
+            project_dir = get_project_dir_from_repo_url(repo_url)
+            logger.info(
+                f"Staging and committing multiple files for project {project_id}"
+            )  # Stage all files
+            for file_path in file_paths:
+                file_path = file_path.replace("\\", "/")
+                logger.info(f"Adding file to Git index: {file_path}")
+                run_git_command(["git", "add", file_path], cwd=project_dir)
+
+            # Check if there are changes to commit
+            status_output = run_git_command(
+                ["git", "status", "--porcelain"], cwd=project_dir
+            )
+            if not status_output.strip():
+                logger.info("No changes to commit")
+                # Get the current commit hash and return it
+                current_hash = run_git_command(
+                    ["git", "rev-parse", "HEAD"], cwd=project_dir
+                )
+                return current_hash
+
+            # Prepare commit message
+            if not commit_message:
+                commit_message = f"Add/update {len(file_paths)} files"
+            logger.info(
+                f"Committing files to Git repository with message: {commit_message}"
+            )
+
+            # Commit the changes with specific git config
+            run_git_command(
+                ["git", "config", "user.name", "CodeBEGen Bot"], cwd=project_dir
+            )
+            run_git_command(
+                ["git", "config", "user.email", "codebegen@example.com"],
+                cwd=project_dir,
+            )
+            run_git_command(["git", "commit", "-m", commit_message], cwd=project_dir)
+
+            # Get the new commit hash
+            logger.info("Getting commit hash")
+            commit_hash = run_git_command(["git", "rev-parse", "HEAD"], cwd=project_dir)
+            logger.info(
+                f"Commit hash: {commit_hash}"
+            )  # Push changes with timeout and error handling
+            logger.info("Pushing changes to remote repository")
+            try:
+                push_result = run_git_command(["git", "push"], cwd=project_dir)
+                logger.info(f"Push result: {push_result}")
+            except Exception as push_error:
+                logger.warning(f"Push failed: {str(push_error)}")
+                logger.info("Continuing with local commit only")
+                # Don't fail the entire operation if push fails
+
+            return commit_hash
+
+        except Exception as e:
+            logger.error(f"Git multi-file operation failed: {str(e)}")
             raise e

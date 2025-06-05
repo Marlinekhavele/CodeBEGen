@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 class JavaScriptTemplate(LanguageTemplate):
     """JavaScript-specific implementation of language template"""
 
+    # Enable Git commits for generated code files
+    git_enabled = True
+
     def get_file_extension(self) -> str:
         """
         Get the standard file extension for JavaScript files.
@@ -45,6 +48,38 @@ class JavaScriptTemplate(LanguageTemplate):
             List[str]: List of required JavaScript component types
         """
         return ["controller", "model", "validation", "utils", "route"]
+
+    def needs_helpers(self, code: str) -> bool:
+        """
+        Check if the JavaScript controller code references utility/helper functions.
+
+        Args:
+            code (str): The JavaScript code to analyze
+
+        Returns:
+            bool: True if the code references helper/utility functions
+        """
+        if not code or not isinstance(code, str):
+            logger.warning("No valid endpoint code provided for helpers detection")
+            return False
+
+        helper_patterns = [
+            r"require\(['\"]\.\./utils/\w+\.utils['\"]",  # e.g., require('../utils/user.utils')
+            r"import\s+.*\s+from\s+['\"]\.\./utils/\w+\.utils['\"]",  # e.g., import { getUser } from '../utils/user.utils'
+            r"\w+Utils\.\w+",  # e.g., userUtils.validateUser
+            r"const\s+\{\s*\w+\s*\}\s*=\s*require\(['\"]\.\./utils/\w+",  # e.g., const { validateUser } = require('../utils/user')
+            r"import\s+\{\s*\w+\s*\}\s*from\s+['\"]\.\./utils/\w+",  # e.g., import { validateUser } from '../utils/user'
+        ]
+
+        logger.debug(
+            f"Checking for helper references in controller code:\n{code[:1000]}..."
+        )  # Log first 1000 chars
+        for pattern in helper_patterns:
+            if re.search(pattern, code, re.IGNORECASE):
+                logger.info(f"Helper dependency detected with pattern: {pattern}")
+                return True
+        logger.debug("No helper dependencies detected in controller code")
+        return False
 
     def needs_database(self, code: str) -> bool:
         """
@@ -244,6 +279,8 @@ class JavaScriptTemplate(LanguageTemplate):
                     "latest_migration_id",
                     "migration_" + datetime.datetime.now().strftime("%Y%m%d%H%M%S"),
                 ),
+                # Pass current file content for context-aware updates
+                "current_code": kwargs.get("current_code", None),
             }
 
             # Generate code using PromptManager template

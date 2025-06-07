@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import logging
+import os
 import re
 from typing import Any, Callable, Dict, List, Optional
 
@@ -38,7 +39,6 @@ class LangchainService:
         Raises:
             ValueError: If Anthropic API key is not found in environment variables
         """
-        import os
 
         # Get API key from environment (try multiple possible names)
         api_key = getattr(settings, "ANTHROPIC_API_KEY", None) or os.getenv(
@@ -96,22 +96,22 @@ class LangchainService:
         # Create a simple chain
         chain = {"input": RunnablePassthrough()} | prompt | llm | StrOutputParser()
 
-        return chain
+        return chain @ staticmethod
 
-    @staticmethod
     def create_streaming_chain(template_string: str, callback):
         """
         Create a streaming chain with a custom callback.
 
         Args:
-            template_string (str): The prompt template string
+            template_string (str): The prompt template string (usually "{input}" for direct input)
             callback: Callback function to process streaming tokens
 
         Returns:
             Chain: A LangChain chain configured for streaming
         """
-        # Create a simple prompt for streaming
-        prompt = PromptTemplate.from_template("{input}")
+        # Create a prompt template - if template_string is just "{input}", use it as-is
+        # This allows the chain to accept input directly
+        prompt = PromptTemplate.from_template(template_string)
 
         # Get the LLM with streaming enabled
         llm = LangchainService.get_llm(streaming=True, callbacks=[callback])
@@ -343,8 +343,99 @@ class LangchainService:
             )
             raise Exception(
                 f"Failed to generate code with template {template_name}: {str(e)}"
-            ) @ staticmethod
+            )
 
+    @staticmethod
+    async def generate_code_with_template_streaming(
+        template_name: str,
+        language: str,
+        streaming_callback,
+        project_id: Optional[str] = None,
+        **template_vars,
+    ) -> Dict[str, Any]:
+        """
+        Generate code using a template with streaming support via callback.
+
+        Args:
+            template_name (str): The name of the template to use
+            language (str): Programming language to generate code for
+            streaming_callback: Callback handler for streaming tokens
+            project_id (Optional[str]): The project identifier
+            **template_vars: Variables to pass to the template
+
+        Returns:
+            Dict[str, Any]: Dictionary with generated code and metadata
+
+        Raises:
+            Exception: If code generation fails
+        """
+        try:
+            # Try the real API first
+            try:
+                # Format the template using PromptManager, including project_id
+                template_vars_with_project_id = {**template_vars}
+                if project_id:
+                    template_vars_with_project_id["project_id"] = project_id
+
+                formatted_prompt = PromptManager.format_template(
+                    template_name=template_name,
+                    language=language,
+                    **template_vars_with_project_id,
+                )  # Enhance the prompt with project structure context
+                enhanced_prompt = LangchainService.enhance_prompt_with_project_context(
+                    formatted_prompt, project_id
+                )
+
+                # Create a streaming chain that accepts the enhanced prompt as input
+                chain = LangchainService.create_streaming_chain(
+                    "{input}", streaming_callback
+                )
+
+                # Execute the chain with the enhanced prompt as input
+                result = await chain.ainvoke({"input": enhanced_prompt})
+
+                # Get the collected content from the callback
+                collected_content = (
+                    streaming_callback.get_content()
+                    if hasattr(streaming_callback, "get_content")
+                    else result
+                )
+
+                # Clean the result
+                cleaned_code = LangchainService.clean_code(collected_content)
+
+                return {
+                    "generated_code": cleaned_code,
+                    "content_base64": LangchainService.encode_content(cleaned_code),
+                    "language": language,
+                    "file_hash": LangchainService.generate_file_hash(cleaned_code),
+                    "token_count": (
+                        streaming_callback.get_token_count()
+                        if hasattr(streaming_callback, "get_token_count")
+                        else 0
+                    ),
+                }
+
+            except Exception as api_error:
+                # If API fails, log the error and re-raise it
+                logger.error(
+                    f"API call failed during streaming code generation: {api_error}",
+                    exc_info=True,
+                )
+                raise Exception(
+                    f"Failed to generate code with template {template_name}: {str(api_error)}"
+                )
+
+        except Exception as e:
+            logger.error(
+                f"Error in streaming template-based code generation: {str(e)}",
+                exc_info=True,
+            )
+            raise Exception(
+                f"Failed to generate code with streaming template {template_name}: {str(e)}"
+            )
+
+    @staticmethod
     def generate_helpers_sync(
         project_id: Optional[str] = None,
         entity_name: str = "",

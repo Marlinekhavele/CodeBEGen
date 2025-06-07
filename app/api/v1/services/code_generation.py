@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
@@ -167,7 +168,10 @@ class CodeGenerationService:
                 self.on_component_complete[component] = callback
 
     async def generate_code(
-        self, request: CodeGenerationRequest, db: Session = Depends(get_db)
+        self,
+        request: CodeGenerationRequest,
+        db: Session = Depends(get_db),
+        streaming_callback=None,
     ) -> CodeGenerationResponse:
         """
         Generate code based on the request, determining needed components for the specific language.
@@ -231,9 +235,9 @@ class CodeGenerationService:
             enhanced_prompt = await self._apply_tier1_prompt_enhancement(
                 prompt, language, project_id, request.additional_context
             )
-            logger.info("Enhanced prompt applied for quality improvement")
-
-            # Step 1: Generate primary endpoint/controller
+            logger.info(
+                "Enhanced prompt applied for quality improvement"
+            )  # Step 1: Generate primary endpoint/controller
             primary_component = await self._generate_primary_component(
                 language_template,
                 project_id,
@@ -242,6 +246,7 @@ class CodeGenerationService:
                 method,
                 endpoint_path,
                 request.additional_context,
+                streaming_callback,
             )
 
             # Step 2: Extract entity name from generated code to confirm/refine it
@@ -363,6 +368,7 @@ class CodeGenerationService:
                         language,
                         language_template,
                     )
+
                 else:  # Generate new components using the unified entity name
                     await self._generate_new_components(
                         result,
@@ -373,6 +379,7 @@ class CodeGenerationService:
                         primary_component,
                         method,
                         endpoint_path,
+                        streaming_callback,
                     )
             else:
                 # Still generate non-database components (schema and helpers if needed)
@@ -385,6 +392,7 @@ class CodeGenerationService:
                     primary_component,
                     method,
                     endpoint_path,
+                    streaming_callback,
                 )  # Step 5.5: Write all generated components to disk
             await self._write_all_components_to_disk(
                 result, project_id, language, entity_name
@@ -689,6 +697,7 @@ class CodeGenerationService:
         method: str,
         endpoint_path: str,
         additional_context: Optional[str] = None,
+        streaming_callback=None,
     ) -> Dict[str, Any]:
         """
         Generate the primary component (usually an endpoint/controller) with a unified entity name.
@@ -708,9 +717,9 @@ class CodeGenerationService:
         try:
             # Log the start of primary component generation
             logger.info(f"Generating primary component for {entity_name}")
-            await self._notify_event("start", "endpoint", {"entity_name": entity_name})
-
-            # Generate the primary component with the unified entity name
+            await self._notify_event(
+                "start", "endpoint", {"entity_name": entity_name}
+            )  # Generate the primary component with the unified entity name
             component_type = language_template.get_component_map().get("endpoint")
             primary_component = await language_template.generate_component(
                 component_type=component_type,
@@ -720,6 +729,7 @@ class CodeGenerationService:
                 method=method,
                 endpoint_path=endpoint_path,
                 additional_context=additional_context,
+                streaming_callback=streaming_callback,
             )
 
             # Ensure the entity name in the component is consistent
@@ -1136,6 +1146,7 @@ class CodeGenerationService:
         generated_code: Dict[str, str],
         method: str,
         endpoint_path: str,
+        streaming_callback=None,
     ) -> Optional[Dict[str, Any]]:
         """
         Process a component type incrementally, handling existing code and dependencies.
@@ -1165,8 +1176,7 @@ class CodeGenerationService:
                     model_code=generated_code.get("model", ""),
                     schema_code=generated_code.get("schema", ""),
                     entity_description=prompt,
-                )
-            # For other components, generate normally using the language template
+                )  # For other components, generate normally using the language template
             component = await self._generate_component(
                 language_template=language_template,
                 component_type=component_type,
@@ -1178,6 +1188,7 @@ class CodeGenerationService:
                 endpoint_code=generated_code.get("endpoint", ""),
                 model_code=generated_code.get("model", ""),
                 schema_code=generated_code.get("schema", ""),
+                streaming_callback=streaming_callback,
             )
 
             # Ensure the component has the correct structure
@@ -1513,6 +1524,7 @@ class CodeGenerationService:
         primary_component: Dict[str, Any],
         method: str,
         endpoint_path: str,
+        streaming_callback=None,
     ) -> None:
         """
         Generate new components based on the primary component and dependencies.
@@ -1550,8 +1562,7 @@ class CodeGenerationService:
 
                     if should_skip:
                         logger.debug(f"Skipping {component_type} for {entity_name}")
-                        continue
-                    # Process the component incrementally
+                        continue  # Process the component incrementally
                     component_result = await self._process_component_incrementally(
                         component_type=component_type,
                         project_id=project_id,
@@ -1561,6 +1572,7 @@ class CodeGenerationService:
                         generated_code={endpoint_component: endpoint_code},
                         method=method,
                         endpoint_path=endpoint_path,
+                        streaming_callback=streaming_callback,
                     )
 
                     # Apply Tier 2 & 3 Quality Processing to each generated component
@@ -1714,6 +1726,7 @@ class CodeGenerationService:
         endpoint_code: str = "",
         model_code: str = "",
         schema_code: str = "",
+        streaming_callback=None,
         **kwargs,
     ) -> Dict[str, Any]:
         """
@@ -1741,9 +1754,7 @@ class CodeGenerationService:
                 "start",
                 component_type,
                 {"entity_name": entity_name, "component_type": component_type},
-            )
-
-            # Use the language template to generate the component
+            )  # Use the language template to generate the component
             if hasattr(language_template, "generate_component"):
                 component = await language_template.generate_component(
                     component_type=component_type,
@@ -1755,6 +1766,7 @@ class CodeGenerationService:
                     endpoint_code=endpoint_code,
                     model_code=model_code,
                     schema_code=schema_code,
+                    streaming_callback=streaming_callback,
                     **kwargs,
                 )
             else:
@@ -1771,6 +1783,7 @@ class CodeGenerationService:
                         endpoint_code=endpoint_code,
                         model_code=model_code,
                         schema_code=schema_code,
+                        streaming_callback=streaming_callback,
                         **kwargs,
                     )
                 else:
@@ -2473,8 +2486,6 @@ class CodeGenerationService:
 
     def _get_current_timestamp(self) -> str:
         """Get current timestamp in ISO format"""
-        from datetime import datetime
-
         return datetime.now().isoformat()
 
     async def _generate_quality_recommendations(

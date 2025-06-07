@@ -228,6 +228,7 @@ class JavaScriptTemplate(LanguageTemplate):
         project_id: str,
         entity_name: str,
         entity_description: str,
+        streaming_callback=None,
         **kwargs,
     ) -> Dict[str, Any]:
         """
@@ -281,12 +282,18 @@ class JavaScriptTemplate(LanguageTemplate):
                 ),
                 # Pass current file content for context-aware updates
                 "current_code": kwargs.get("current_code", None),
-            }
-
-            # Generate code using PromptManager template
-            result = await LangchainService.generate_code_with_template(
-                template_name=template_name, language="javascript", **template_vars
-            )
+            }  # Generate code using PromptManager template with streaming support
+            if streaming_callback:
+                result = await LangchainService.generate_code_with_template_streaming(
+                    template_name=template_name,
+                    language="javascript",
+                    streaming_callback=streaming_callback,
+                    **template_vars,
+                )
+            else:
+                result = await LangchainService.generate_code_with_template(
+                    template_name=template_name, language="javascript", **template_vars
+                )
 
             # Add language-specific metadata
             result["file_path"] = self.get_component_paths(
@@ -310,6 +317,7 @@ class JavaScriptTemplate(LanguageTemplate):
         entity_name: str,
         entity_description: str,
         controller_code: Optional[str] = None,
+        streaming_callback=None,
     ) -> Dict[str, Any]:
         """
         Generate a JavaScript Express route file using PromptManager templates.
@@ -329,12 +337,18 @@ class JavaScriptTemplate(LanguageTemplate):
             "entity_description": entity_description,
             "endpoint_description": entity_description,
             "endpoint_code": controller_code or "",
-        }
-
-        # Generate code using the route template from PromptManager
-        result = await LangchainService.generate_code_with_template(
-            template_name="route", language="javascript", **template_vars
-        )
+        }  # Generate code using the route template from PromptManager with streaming support
+        if streaming_callback:
+            result = await LangchainService.generate_code_with_template_streaming(
+                template_name="route",
+                language="javascript",
+                streaming_callback=streaming_callback,
+                **template_vars,
+            )
+        else:
+            result = await LangchainService.generate_code_with_template(
+                template_name="route", language="javascript", **template_vars
+            )
 
         # Add language-specific metadata
         result["file_path"] = self.get_component_paths(project_id, entity_name)["route"]
@@ -456,7 +470,9 @@ class JavaScriptTemplate(LanguageTemplate):
         # Replace hyphens and spaces with underscores
         return re.sub(r"[-\s]", "_", s2).lower()
 
-    async def generate_dockerfile(self, project_id: str, entity_name: str) -> str:
+    async def generate_dockerfile(
+        self, project_id: str, entity_name: str, streaming_callback=None
+    ) -> str:
         """
         Generate a Dockerfile for JavaScript/Node.js application.
 
@@ -467,14 +483,22 @@ class JavaScriptTemplate(LanguageTemplate):
         Returns:
             str: Dockerfile content
         """
-        try:
-            # Use the prompt template via LangchainService
-            result = LangchainService.generate_code_with_template(
-                template_name="dockerfile",
-                language="javascript",
-                project_id=project_id,
-                entity_name=entity_name,
-            )
+        try:  # Use the prompt template via LangchainService with streaming support
+            if streaming_callback:
+                result = await LangchainService.generate_code_with_template_streaming(
+                    template_name="dockerfile",
+                    language="javascript",
+                    streaming_callback=streaming_callback,
+                    project_id=project_id,
+                    entity_name=entity_name,
+                )
+            else:
+                result = await LangchainService.generate_code_with_template(
+                    template_name="dockerfile",
+                    language="javascript",
+                    project_id=project_id,
+                    entity_name=entity_name,
+                )
 
             return result["generated_code"]
         except Exception as e:

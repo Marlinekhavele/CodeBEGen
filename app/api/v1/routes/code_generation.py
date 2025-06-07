@@ -18,7 +18,7 @@ from app.api.v1.schemas.code_generation import (
 )
 from app.api.v1.services.code_generation import CodeGenerationService
 
-router = APIRouter()
+router = APIRouter(prefix="/code-generation", tags=["code-generation"])
 logger = logging.getLogger(__name__)
 
 
@@ -55,7 +55,7 @@ async def generate_code(request: CodeGenerationRequest, db: Session = Depends(ge
 
 
 @router.websocket("/generate/stream")
-async def generate_code_stream(websocket: WebSocket, db: Session = Depends(get_db)):
+async def generate_code_stream(websocket: WebSocket):
     """
     Streams real-time code generation updates over WebSocket.
 
@@ -68,13 +68,16 @@ async def generate_code_stream(websocket: WebSocket, db: Session = Depends(get_d
         websocket (WebSocket): The WebSocket connection object.
 
     Returns:
-        None
-
-    Raises:
+        None    Raises:
         WebSocketDisconnect: If the client disconnects during the code generation session.
         Exception: If an unexpected error occurs during code generation.
     """
     await websocket.accept()
+
+    # Get database session manually since WebSocket doesn't support dependency injection
+    from app.api.db.database import SessionLocal
+
+    db = SessionLocal()
 
     try:
         await websocket.send_json(
@@ -126,7 +129,11 @@ async def generate_code_stream(websocket: WebSocket, db: Session = Depends(get_d
                     "migration_status": status,
                     "migration_error": error,
                 }
-            )
+            )  # Create streaming callback for real-time code streaming
+
+        from app.api.v1.utils.streaming_callback import StreamingCallback
+
+        streaming_callback = StreamingCallback(websocket=websocket)
 
         code_gen_service = CodeGenerationService(
             on_endpoint_start=lambda event, data: on_component_start("endpoint", data),
@@ -162,7 +169,7 @@ async def generate_code_stream(websocket: WebSocket, db: Session = Depends(get_d
             on_info=on_info,
         )
 
-        response = await code_gen_service.generate_code(request, db)
+        response = await code_gen_service.generate_code(request, db, streaming_callback)
 
         await websocket.send_json(
             {
@@ -186,3 +193,6 @@ async def generate_code_stream(websocket: WebSocket, db: Session = Depends(get_d
             )
         except Exception:
             pass
+    finally:
+        # Always close the database session
+        db.close()

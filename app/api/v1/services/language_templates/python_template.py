@@ -344,6 +344,7 @@ class PythonTemplate(LanguageTemplate):
         project_id: str,
         entity_name: str,
         entity_description: str,
+        streaming_callback=None,
         **kwargs,
     ) -> Dict[str, Any]:
         """
@@ -404,12 +405,18 @@ class PythonTemplate(LanguageTemplate):
             "related_endpoints": related_endpoints,
             # Enhanced context: similar endpoint patterns
             "similar_endpoints": kwargs.get("similar_endpoints", {}),
-        }
-
-        # Generate code using PromptManager template
-        result = await LangchainService.generate_code_with_template(
-            template_name=template_name, language="python", **template_vars
-        )
+        }  # Generate code using PromptManager template with streaming support
+        if streaming_callback:
+            result = await LangchainService.generate_code_with_template_streaming(
+                template_name=template_name,
+                language="python",
+                streaming_callback=streaming_callback,
+                **template_vars,
+            )
+        else:
+            result = await LangchainService.generate_code_with_template(
+                template_name=template_name, language="python", **template_vars
+            )
 
         # Add language-specific metadata
         result["file_path"] = self.get_component_paths(
@@ -424,7 +431,9 @@ class PythonTemplate(LanguageTemplate):
 
         return result
 
-    async def generate_dockerfile(self, project_id: str, entity_name: str) -> str:
+    async def generate_dockerfile(
+        self, project_id: str, entity_name: str, streaming_callback=None
+    ) -> str:
         """
         Generate a Dockerfile for Python FastAPI application.
 
@@ -435,14 +444,22 @@ class PythonTemplate(LanguageTemplate):
         Returns:
             str: Dockerfile content
         """
-        try:
-            # Use the prompt template via LangchainService
-            result = await LangchainService.generate_code_with_template(
-                template_name="dockerfile",
-                language="python",
-                project_id=project_id,
-                entity_name=entity_name,
-            )
+        try:  # Use the prompt template via LangchainService with streaming support
+            if streaming_callback:
+                result = await LangchainService.generate_code_with_template_streaming(
+                    template_name="dockerfile",
+                    language="python",
+                    streaming_callback=streaming_callback,
+                    project_id=project_id,
+                    entity_name=entity_name,
+                )
+            else:
+                result = await LangchainService.generate_code_with_template(
+                    template_name="dockerfile",
+                    language="python",
+                    project_id=project_id,
+                    entity_name=entity_name,
+                )
 
             return result["generated_code"]
         except Exception as e:

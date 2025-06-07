@@ -208,12 +208,12 @@ class PromptManager:
                 f"✅ Found template '{template_name}' for '{language}': {template_preview}"
             )
             return template
-
         logger.error(
             f"❌ Template '{template_name}' not found for language '{language}'"
         )
-        return None @ staticmethod
+        return None
 
+    @staticmethod
     def format_template(template_name: str, language: str, **kwargs) -> str:
         """
         Format a template with the provided variables.

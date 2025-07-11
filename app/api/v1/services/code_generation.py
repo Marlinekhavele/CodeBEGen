@@ -289,12 +289,12 @@ class CodeGenerationService:
                 # If no entity was extracted or it matches our initial guess, ensure it's in proper format
                 entity_name = self._ensure_pascal_case(entity_name)
                 logger.info(f"Final unified entity name: {entity_name}")
-                primary_component["entity_name"] = entity_name
-
-            # Step 3: Determine if database components are needed
+                primary_component["entity_name"] = entity_name            # Step 3: Determine if database components are needed
             needs_database = language_template.needs_database(
                 primary_component.get("generated_code", "")
-            )  # Step 4: Initialize result dictionary with updated primary component
+            )
+            
+            # Step 4: Initialize result dictionary with updated primary component
             component_type = language_template.get_component_map().get("endpoint")
             result = self._initialize_result_dictionary(
                 primary_component,
@@ -302,6 +302,7 @@ class CodeGenerationService:
                 entity_name,
                 needs_database,
                 component_type,
+                language,
             )  # Step 4.5: Apply Tier 2 & 3 Quality Processing (Real-time + Auto-fixing)
             if primary_component and "generated_code" in primary_component:
                 primary_component = await self._apply_tier2_tier3_quality_processing(
@@ -792,11 +793,10 @@ class CodeGenerationService:
         entity_name,
         needs_database,
         component_type,
+        language,
     ):
         """
-        Initialize the result dictionary with common fields and primary component data.
-
-        This method creates the base structure for the generation result that will be
+        Initialize the result dictionary with common fields and primary component data.        This method creates the base structure for the generation result that will be
         populated with all generated components and metadata throughout the generation process.
 
         Args:
@@ -805,14 +805,15 @@ class CodeGenerationService:
             entity_name: Name of the main entity being operated on
             needs_database: Boolean indicating if database components are required
             component_type: Type of the primary component (endpoint, controller, etc.)
+            language: The programming language name (e.g., 'python', 'javascript')
 
         Returns:
             Dict: Initialized result dictionary with primary component and metadata
         """
         return {
             component_type: primary_component,
-            "language": language_template.get_file_extension(),
-            "file_extension": language_template.get_file_extension(),
+            "language": language,
+            "file_extension": f".{language_template.get_file_extension()}",
             "entity_name": entity_name,
             "detected_database_usage": needs_database,
         }
@@ -977,8 +978,7 @@ class CodeGenerationService:
                             "file_path": rel_path,
                             "generated_code": file_info.get("content"),
                             "content_base64": file_info.get("content_base64"),
-                            "file_hash": file_info.get("file_hash"),
-                        }
+                            "file_hash": file_info.get("file_hash"),                        }
                     )
         else:
             await self._notify_info(
@@ -1006,7 +1006,7 @@ class CodeGenerationService:
             model_code: The model code for reference
             schema_code: The schema code for reference
             entity_description: Optional description of the entity
-
+            
         Returns:
             Dict[str, Any]: Result containing file path and generated code
         """
@@ -1016,10 +1016,11 @@ class CodeGenerationService:
                 project_id=project_id, entity_name=entity_name
             )
             helpers_file_path = component_paths.get("helpers")
-
             if not helpers_file_path:
                 logger.error("No helpers file path found in language template")
-                return {"file_path": "", "generated_code": ""}  # Determine language
+                return None
+
+            # Determine language
             file_extension = language_template.get_file_extension()
             language = "python" if file_extension in ("py", ".py") else "javascript"
 
@@ -1052,13 +1053,11 @@ class CodeGenerationService:
                         f.read()
                     )  # Find what functions are implemented vs required
             implemented = set(extract_functions(existing_code))
-            required = set(extract_required(endpoint_code))
-
-            # IMPORTANT FIX: Don't just subtract implemented from required
+            required = set(extract_required(endpoint_code))            # IMPORTANT FIX: Don't just subtract implemented from required
             # This would lose helper functions from previous methods on the same endpoint
             # Instead, treat missing as the functions needed by the new endpoint that aren't implemented yet
             missing = required - implemented
-
+            
             # Maintain a list of all functions that should be in the final helpers file
             # This includes both existing implemented functions AND newly required functions
             all_required_functions = implemented.union(required)
@@ -1066,10 +1065,18 @@ class CodeGenerationService:
             if not missing:
                 logger.info(f"No missing helpers for {entity_name}")
                 return {
+                    "component_type": "helpers",
+                    "entity_name": entity_name,
                     "file_path": helpers_file_path,
                     "generated_code": existing_code,
-                    "updated": False,
-                }  # Generate only the missing helpers, but preserve the context of all functions            from app.api.v1.services.langchain_service import LangchainService            # We want to generate only the missing functions but need to make sure
+                    "content_base64": LangchainService.encode_content(existing_code) if existing_code else "",
+                    "file_hash": LangchainService.generate_file_hash(existing_code) if existing_code else "",                    "updated": False,
+                }
+            
+            # Generate only the missing helpers, but preserve the context of all functions
+            from app.api.v1.services.langchain_service import LangchainService
+            
+            # We want to generate only the missing functions but need to make sure
             # we're not losing previously implemented functions, so we combine them
             # in the endpoint_code to provide proper context
 
@@ -1454,21 +1461,27 @@ class CodeGenerationService:
         if hasattr(language_template, "extract_entity_from_prompt"):
             entity_from_prompt = language_template.extract_entity_from_prompt(prompt)
             if entity_from_prompt:
-                return entity_from_prompt
-
-        # If that fails, try extracting from the endpoint path
+                return entity_from_prompt        # If that fails, try extracting from the endpoint path
         if endpoint_path:
             # Extract the last segment of the path
             path_segments = endpoint_path.strip("/").split("/")
             last_segment = path_segments[-1] if path_segments else ""
 
             if last_segment:
-                # Convert to singular if plural
-                if last_segment.endswith("s") and not last_segment.endswith("ss"):
-                    last_segment = last_segment[:-1]
+                # Filter out generic API path terms that aren't meaningful entity names
+                generic_terms = {
+                    "api", "v1", "v2", "v3", "admin", "auth", "login", "logout", 
+                    "health", "status", "ping", "docs", "swagger", "openapi",
+                    "static", "assets", "public", "private", "secure", "test"
+                }
+                
+                if last_segment.lower() not in generic_terms:
+                    # Convert to singular if plural
+                    if last_segment.endswith("s") and not last_segment.endswith("ss"):
+                        last_segment = last_segment[:-1]
 
-                # Convert to PascalCase
-                return self._ensure_pascal_case(last_segment)
+                    # Convert to PascalCase
+                    return self._ensure_pascal_case(last_segment)
 
         # Default fallback
         return "Resource"

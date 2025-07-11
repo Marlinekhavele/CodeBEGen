@@ -50,7 +50,7 @@ app = FastAPI(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Configure CORS
-origins = ["http://localhost:3000", "http://localhost:7001", "*"]
+origins = ["http://localhost:3000", "http://localhost:7001", "http://127.0.0.1:3000", "http://127.0.0.1:7001"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,

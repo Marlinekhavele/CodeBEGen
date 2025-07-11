@@ -70,6 +70,15 @@ class CodeGenerationQualityMiddleware:
             )
 
             for file_path, content in generated_files.items():
+                # Skip non-Python files for Python-specific quality checks
+                if language == "python" and not file_path.endswith(".py"):
+                    logger.info(f"Skipping quality checks for non-Python file: {file_path}")
+                    processed_files[file_path] = content
+                    quality_reports[file_path] = {
+                        "skipped": True,
+                        "reason": "Non-Python file, skipped Python quality checks."
+                    }
+                    continue
                 try:
                     # Apply quality improvements
                     quality_report = await self.quality_service.improve_generated_code(

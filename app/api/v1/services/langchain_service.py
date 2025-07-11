@@ -96,8 +96,9 @@ class LangchainService:
         # Create a simple chain
         chain = {"input": RunnablePassthrough()} | prompt | llm | StrOutputParser()
 
-        return chain @ staticmethod
-
+        return chain 
+    
+    @staticmethod
     def create_streaming_chain(template_string: str, callback):
         """
         Create a streaming chain with a custom callback.

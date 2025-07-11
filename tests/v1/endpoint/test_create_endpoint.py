@@ -90,7 +90,7 @@ def test_create_endpoint_file_invalid_repo(mock_project_dir):
     "app.api.v1.services.endpoints.EndpointService.create_endpoint",
     side_effect=Exception("Unexpected error"),
 )
-def test_create_endpoint_file_server_error(mock_create_file):
+def test_create_endpoint_file_server_error(mock_create_endpoint):
     """
     Test unexpected internal server error when creating an endpoint file.
     """

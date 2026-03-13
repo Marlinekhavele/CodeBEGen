@@ -1,22 +1,23 @@
-[tool.poetry]
+[project]
 name = "code-gen-be"
 version = "0.1.0"
 description = "CodegenBE is an AI-powered tool that enables developers to rapidly generate backend API functionalities with minimal friction."
+
 authors = [
-    "Marline Khavele <khavelemarline@gmail.com>",
-    "Oshin Samuel <samuelt.oshin@gmail.com>",
-    "Emmanuel Ekwere <emaduilzjr1@gmail.com>",
-    "Samuel Henrietta Onoge <hetty8004@gmail.com>"
+  { name = "Marline Khavele", email = "khavelemarline@gmail.com" },
+  { name = "Oshin Samuel", email = "samuelt.oshin@gmail.com" },
+  { name = "Emmanuel Ekwere", email = "emaduilzjr1@gmail.com" },
+  { name = "Samuel Henrietta Onoge", email = "hetty8004@gmail.com" }
 ]
+
 readme = "README.md"
-package-mode = false
+requires-python = ">=3.10,<3.14"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.14"
 fastapi = ">=0.115.12,<0.116.0"
-alembic = ">=1.15.2,<2.0.0"
-pre-commit = ">=4.2.0,<5.0.0"
 uvicorn = ">=0.34.0,<0.35.0"
+alembic = ">=1.15.2,<2.0.0"
 python-decouple = ">=3.8,<4.0"
 pydantic-settings = ">=2.8.1,<3.0.0"
 psycopg2 = ">=2.9.10,<3.0.0"
